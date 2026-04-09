@@ -1,10 +1,14 @@
 // js/dashboard.js
 // Calcular métricas y renderizar el dashboard con nuevo diseño
 
-import { getTodosMovimientos } from './movimientos.js';
-import { formatCOP, labelMes, claveMes, toSentenceCase } from './ui.js';
+import { getTodosMovimientos, getMovimientosDia } from './movimientos.js';
+import { formatCOP, labelMes, claveMes, toSentenceCase, hoy, hoyISO, isoADisplay, labelFecha } from './ui.js';
+
+// empresaCodigo guardado para usarlo en el listener del selector de fecha
+let _empresaCodigo = '';
 
 export async function renderDashboard(empresaCodigo, nombreEmpresa) {
+  _empresaCodigo = empresaCodigo;
   const contenedor = document.getElementById('dashboard-content');
   const todos = await getTodosMovimientos(empresaCodigo);
   const nombre = nombreEmpresa ? toSentenceCase(nombreEmpresa) : 'tu local';
@@ -26,25 +30,24 @@ export async function renderDashboard(empresaCodigo, nombreEmpresa) {
         <p>Aún no hay movimientos registrados.</p>
         <p>Ve a <strong>Registro</strong> para agregar el primero.</p>
       </div>`;
-    contenedor.querySelector('.dash-empty strong')
-      ?.addEventListener('click', () => window.__navTo?.('registro'));
+    contenedor.querySelector('strong')?.addEventListener('click', () => window.__navTo?.('registro'));
     return;
   }
 
-  const hoy      = new Date();
-  const mesAct   = hoy.getMonth() + 1;
-  const anioAct  = hoy.getFullYear();
-  const claveAct = claveMes(mesAct, anioAct);
-  const mesPrev  = mesAct === 1 ? 12 : mesAct - 1;
-  const anioPrev = mesAct === 1 ? anioAct - 1 : anioAct;
+  const hoyStr    = new Date();
+  const mesAct    = hoyStr.getMonth() + 1;
+  const anioAct   = hoyStr.getFullYear();
+  const claveAct  = claveMes(mesAct, anioAct);
+  const mesPrev   = mesAct === 1 ? 12 : mesAct - 1;
+  const anioPrev  = mesAct === 1 ? anioAct - 1 : anioAct;
   const clavePrev = claveMes(mesPrev, anioPrev);
 
-  const porMes   = agruparPorMes(todos);
-  const act      = porMes[claveAct]  || [];
-  const prev     = porMes[clavePrev] || [];
-  const totAct   = totales(act);
-  const totPrev  = totales(prev);
-  const utilidad = totAct.venta - totAct.gasto - totAct.compra;
+  const porMes        = agruparPorMes(todos);
+  const act           = porMes[claveAct]  || [];
+  const prev          = porMes[clavePrev] || [];
+  const totAct        = totales(act);
+  const totPrev       = totales(prev);
+  const utilidad      = totAct.venta - totAct.gasto - totAct.compra;
   const mesesOrdenados = Object.keys(porMes).sort().slice(-6);
 
   contenedor.innerHTML = `
@@ -66,9 +69,9 @@ export async function renderDashboard(empresaCodigo, nombreEmpresa) {
     </div>
 
     <div class="dash-metrics">
-      ${cardMetrica('Ventas del mes',   totAct.venta,  'green', deltaHtml(totAct.venta,  totPrev.venta,  false))}
-      ${cardMetrica('Gastos del mes',   totAct.gasto,  'red',   deltaHtml(totAct.gasto,  totPrev.gasto,  true))}
-      ${cardMetrica('Compras del mes',  totAct.compra, 'blue',  deltaHtml(totAct.compra, totPrev.compra, true))}
+      ${cardMetrica('Ventas del mes',  totAct.venta,  'green', deltaHtml(totAct.venta,  totPrev.venta,  false))}
+      ${cardMetrica('Gastos del mes',  totAct.gasto,  'red',   deltaHtml(totAct.gasto,  totPrev.gasto,  true))}
+      ${cardMetrica('Compras del mes', totAct.compra, 'blue',  deltaHtml(totAct.compra, totPrev.compra, true))}
       ${cardUtilidad(utilidad)}
     </div>
 
@@ -78,6 +81,8 @@ export async function renderDashboard(empresaCodigo, nombreEmpresa) {
     </div>
 
     ${tablaProveedores(act)}
+
+    ${htmlResumenDiario()}
 
     <div class="dash-quick-links">
       <div class="dash-quick-card" id="ql-informes">
@@ -110,15 +115,107 @@ export async function renderDashboard(empresaCodigo, nombreEmpresa) {
     </div>
   `;
 
-  // Conectar botones a navegación
+  // Conectar navegación
   contenedor.querySelector('#dash-btn-exportar')?.addEventListener('click', () => window.__navTo?.('informes'));
   contenedor.querySelector('#dash-btn-registro')?.addEventListener('click', () => window.__navTo?.('registro'));
   contenedor.querySelector('#ql-informes')?.addEventListener('click',  () => window.__navTo?.('informes'));
   contenedor.querySelector('#ql-registro')?.addEventListener('click',  () => window.__navTo?.('registro'));
   contenedor.querySelector('#ql-historial')?.addEventListener('click', () => window.__navTo?.('registro'));
+
+  // Resumen diario: cargar hoy y conectar selector
+  await cargarResumenDia(hoy());
+  document.getElementById('dash-fecha-dia')?.addEventListener('change', async (e) => {
+    if (e.target.value) await cargarResumenDia(isoADisplay(e.target.value));
+  });
 }
 
-// ── Helpers ────────────────────────────────────────────────
+// ── Resumen diario ─────────────────────────────────────────
+
+function htmlResumenDiario() {
+  return `
+    <div class="dash-card dash-dia-card" style="margin-top:16px">
+      <div class="dash-dia-head">
+        <div>
+          <div class="dash-label">Detalle</div>
+          <div class="dash-card-title" style="margin:0">Resumen del día</div>
+        </div>
+        <input type="date" id="dash-fecha-dia" value="${hoyISO()}" class="dash-dia-input" />
+      </div>
+      <div id="dash-dia-contenido">
+        <div class="dash-dia-loading">Cargando...</div>
+      </div>
+    </div>`;
+}
+
+async function cargarResumenDia(fechaDisplay) {
+  const contenido = document.getElementById('dash-dia-contenido');
+  if (!contenido) return;
+  contenido.innerHTML = `<div class="dash-dia-loading">Cargando...</div>`;
+
+  const movs = await getMovimientosDia(_empresaCodigo, fechaDisplay);
+
+  if (!movs.length) {
+    contenido.innerHTML = `
+      <div class="dash-dia-empty">
+        Sin movimientos el ${labelFecha(fechaDisplay)}.
+      </div>`;
+    return;
+  }
+
+  const tot = totales(movs);
+  const balance = tot.venta - tot.gasto - tot.compra;
+  const balColor = balance >= 0 ? 'var(--green)' : 'var(--red)';
+
+  // Agrupar por categoría para mostrar detalle
+  const porCat = movs.reduce((acc, m) => {
+    const cat = m.categoria || 'OTRO';
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(m);
+    return acc;
+  }, {});
+
+  const filasCat = Object.entries(porCat).map(([cat, items]) => {
+    const total = items.reduce((s, m) => s + m.valor, 0);
+    const catLow = cat.toLowerCase();
+    const color = catLow === 'venta' ? 'var(--green)' : catLow === 'gasto' ? 'var(--red)' : 'var(--blue)';
+    const itemsHtml = items.map(m => `
+      <div class="dash-dia-item">
+        <span class="dash-dia-item-prov">${m.proveedor ? toSentenceCase(m.proveedor) : '—'}</span>
+        <span class="dash-dia-item-val" style="color:${color}">${formatCOP(m.valor)}</span>
+      </div>`).join('');
+    return `
+      <div class="dash-dia-cat">
+        <div class="dash-dia-cat-head">
+          <span class="badge badge-${catLow}">${toSentenceCase(cat)}</span>
+          <span class="dash-dia-cat-total" style="color:${color}">${formatCOP(total)}</span>
+        </div>
+        <div class="dash-dia-items">${itemsHtml}</div>
+      </div>`;
+  }).join('');
+
+  contenido.innerHTML = `
+    <div class="dash-dia-metrics">
+      <div class="dash-dia-metric">
+        <div class="dash-dia-metric-label">Ventas</div>
+        <div class="dash-dia-metric-val" style="color:var(--green)">${formatCOP(tot.venta)}</div>
+      </div>
+      <div class="dash-dia-metric">
+        <div class="dash-dia-metric-label">Gastos</div>
+        <div class="dash-dia-metric-val" style="color:var(--red)">${formatCOP(tot.gasto)}</div>
+      </div>
+      <div class="dash-dia-metric">
+        <div class="dash-dia-metric-label">Compras</div>
+        <div class="dash-dia-metric-val" style="color:var(--blue)">${formatCOP(tot.compra)}</div>
+      </div>
+      <div class="dash-dia-metric dash-dia-metric-balance">
+        <div class="dash-dia-metric-label">Balance</div>
+        <div class="dash-dia-metric-val" style="color:${balColor}">${formatCOP(balance)}</div>
+      </div>
+    </div>
+    <div class="dash-dia-cats">${filasCat}</div>`;
+}
+
+// ── Helpers comunes ────────────────────────────────────────
 
 function agruparPorMes(movs) {
   return movs.reduce((acc, m) => {
@@ -155,22 +252,17 @@ function cardMetrica(label, valor, color, delta) {
       <div class="dash-metric-label">${label}</div>
       <div class="dash-metric-value" style="color:${barColor}">${formatCOP(valor)}</div>
       <div class="dash-metric-delta">${delta}</div>
-      <div class="dash-metric-bar">
-        <div class="dash-metric-bar-fill" style="background:${barColor}"></div>
-      </div>
+      <div class="dash-metric-bar"><div class="dash-metric-bar-fill" style="background:${barColor}"></div></div>
     </div>`;
 }
 
 function cardUtilidad(utilidad) {
-  const positiva = utilidad >= 0;
   return `
     <div class="dash-metric-card dash-metric-highlight">
       <div class="dash-metric-label" style="color:rgba(255,255,255,0.65)">Utilidad bruta</div>
       <div class="dash-metric-value" style="color:#fff">${formatCOP(utilidad)}</div>
       <div class="dash-metric-delta" style="color:rgba(255,255,255,0.55)">Ventas − gastos − compras</div>
-      <div class="dash-metric-bar">
-        <div class="dash-metric-bar-fill" style="background:rgba(255,255,255,0.3);width:100%"></div>
-      </div>
+      <div class="dash-metric-bar"><div class="dash-metric-bar-fill" style="background:rgba(255,255,255,0.3);width:100%"></div></div>
     </div>`;
 }
 
@@ -180,7 +272,6 @@ function chartEvolución(porMes, meses) {
     return { clave: c, valor: t.venta };
   });
   const max = Math.max(...ventas.map(v => v.valor), 1);
-
   const bars = ventas.map(({ clave, valor }) => {
     const pct = Math.round((valor / max) * 100);
     const [anio, mes] = clave.split('-');
@@ -191,7 +282,6 @@ function chartEvolución(porMes, meses) {
         <span class="dash-spark-lbl">${lbl}</span>
       </div>`;
   }).join('');
-
   return `
     <div class="dash-card">
       <div class="dash-card-title">Evolución de ventas</div>
@@ -211,7 +301,6 @@ function chartCategorias(tot) {
         <div class="dash-cat-fill" style="width:${Math.round(valor/max*100)}%;background:${color}"></div>
       </div>
     </div>`;
-
   return `
     <div class="dash-card">
       <div class="dash-card-title">Movimientos del mes</div>
@@ -231,14 +320,12 @@ function tablaProveedores(movs) {
   }, {});
   const sorted = Object.entries(agrup).sort((a,b) => b[1].total - a[1].total).slice(0, 5);
   if (!sorted.length) return '';
-
   const filas = sorted.map(([prov, { total, count }]) => `
     <tr>
       <td>${toSentenceCase(prov)}</td>
       <td>${count}</td>
       <td class="amount compra">${formatCOP(total)}</td>
     </tr>`).join('');
-
   return `
     <div class="dash-card" style="margin-top:16px">
       <div class="dash-card-title">Top proveedores — compras del mes</div>

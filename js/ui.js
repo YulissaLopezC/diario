@@ -48,6 +48,28 @@ export function hoy() {
   return `${dd}/${mm}/${d.getFullYear()}`;
 }
 
+// Fecha de hoy en "YYYY-MM-DD" (para input type=date)
+export function hoyISO() {
+  const d  = new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+// Convierte "YYYY-MM-DD" a "DD/MM/YYYY"
+export function isoADisplay(iso) {
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+// Label legible de una fecha "DD/MM/YYYY" → "Jueves 9 de abril"
+export function labelFecha(fechaDisplay) {
+  const parts = fechaDisplay.split('/');
+  if (parts.length !== 3) return fechaDisplay;
+  const d = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+  return d.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
 // ── Toasts ────────────────────────────────────────────────
 export function toast(msg, tipo = 'success') {
   const container = document.getElementById('toast-container');

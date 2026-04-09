@@ -67,7 +67,21 @@ export async function getMesesConDatos(empresaCodigo) {
   return [...claves].sort().reverse(); // más reciente primero
 }
 
-// ── Eliminar un movimiento ─────────────────────────────────
+// ── Leer movimientos de un día específico ──────────────────
+export async function getMovimientosDia(empresaCodigo, fechaDisplay) {
+  // fechaDisplay formato "DD/MM/YYYY"
+  const parts = fechaDisplay.split('/');
+  if (parts.length !== 3) return [];
+  const clave = `${parts[2]}-${parts[1].padStart(2,'0')}`;
+
+  const q = query(
+    refMovimientos(empresaCodigo),
+    where('claveMes', '==', clave),
+    where('fecha', '==', fechaDisplay)
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
 export async function eliminarMovimiento(empresaCodigo, movId) {
   const ref = doc(db, 'empresas', empresaCodigo, 'movimientos', movId);
   await deleteDoc(ref);

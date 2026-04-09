@@ -5,22 +5,14 @@
 import { initAuth, loginConGoogle, logout, getInitials } from './auth.js';
 import { cargarEmpresaDelUsuario, crearEmpresa, unirseAEmpresa, empresaActual } from './empresa.js';
 import { cargarSubcategorias } from './subcategorias.js';
-import { agregarMovimiento, getMovimientosMes, getMesesConDatos, eliminarMovimiento } from './movimientos.js';
+import { agregarMovimiento, getMovimientosMes, getMesesConDatos, eliminarMovimiento, getMovimientosDia } from './movimientos.js';
 import { renderDashboard } from './dashboard.js';
 import { initInformes } from './informes.js';
 import {
   showPage, toast, showLoader, hideLoader,
   showModal, showConfirm, formatCOP, labelMes,
-  claveMes, parseFecha, hoy, toSentenceCase, emptyState
+  claveMes, parseFecha, hoy, hoyISO, toSentenceCase, emptyState
 } from './ui.js';
-
-// ── hoyISO: fecha de hoy en formato YYYY-MM-DD ─────────────
-function hoyISO() {
-  const d  = new Date();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${mm}-${dd}`;
-}
 
 // ── Estado local ───────────────────────────────────────────
 let userActual    = null;
@@ -162,6 +154,34 @@ async function goToInformes() {
   await initInformes(empresaCodigo);
 }
 
+// ── Banner resumen del día en registro ─────────────────────
+async function actualizarBannerDia() {
+  const banner = document.getElementById('reg-dia-banner');
+  if (!banner) return;
+
+  const movs = await getMovimientosDia(empresaCodigo, hoy());
+  if (!movs.length) { banner.style.display = 'none'; return; }
+
+  let v = 0, g = 0, c = 0;
+  movs.forEach(m => {
+    const cat = (m.categoria || '').toLowerCase();
+    if (cat === 'venta')  v += m.valor;
+    if (cat === 'gasto')  g += m.valor;
+    if (cat === 'compra') c += m.valor;
+  });
+
+  const balance = v - g - c;
+  const balColor = balance >= 0 ? 'var(--green)' : 'var(--red)';
+
+  document.getElementById('rd-ventas').textContent  = formatCOP(v);
+  document.getElementById('rd-gastos').textContent  = formatCOP(g);
+  document.getElementById('rd-compras').textContent = formatCOP(c);
+  const elB = document.getElementById('rd-balance');
+  elB.textContent   = formatCOP(balance);
+  elB.style.color   = balColor;
+  banner.style.display = 'flex';
+}
+
 // ── Pantalla de Registro ───────────────────────────────────
 async function initRegistro() {
   // Fecha de hoy en formato YYYY-MM-DD (requerido por input type=date)
@@ -183,6 +203,7 @@ async function initRegistro() {
   document.getElementById('btn-agregar').addEventListener('click', agregarMovimientoUI);
 
   await recargarMeses();
+  await actualizarBannerDia();
 }
 
 
@@ -224,6 +245,7 @@ async function agregarMovimientoUI() {
     }
 
     await recargarMeses();
+    await actualizarBannerDia();
 
   } catch (err) {
     console.error(err);
@@ -423,6 +445,7 @@ function confirmarEliminar(movId) {
         const totalPags = Math.ceil(movsCache.length / POR_PAGINA);
         if (pagActual > totalPags && pagActual > 1) pagActual--;
         renderPagina();
+        await actualizarBannerDia();
         toast('Movimiento eliminado.');
       } catch (err) {
         console.error(err);

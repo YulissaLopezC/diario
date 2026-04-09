@@ -785,6 +785,75 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   .inf-sidebar { position: static; }
 }
 
+/* ── Resumen diario — dashboard ── */
+.dash-dia-card { margin-top: 16px; }
+.dash-dia-head {
+  display: flex; justify-content: space-between;
+  align-items: flex-start; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;
+}
+.dash-dia-input {
+  height: 32px; padding: 0 10px;
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--surface); color: var(--text);
+  font-size: 13px; font-family: var(--font); outline: none;
+  cursor: pointer; transition: border-color var(--transition);
+}
+.dash-dia-input:focus { border-color: var(--green); }
+.dash-dia-loading { font-size: 12px; color: var(--text-3); padding: 12px 0; }
+.dash-dia-empty   { font-size: 12px; color: var(--text-3); padding: 12px 0; }
+
+.dash-dia-metrics {
+  display: grid; grid-template-columns: repeat(4, minmax(0,1fr));
+  gap: 10px; margin-bottom: 16px;
+}
+.dash-dia-metric { background: var(--surface-2); border-radius: var(--radius-md); padding: 12px; }
+.dash-dia-metric-balance { border: 1px solid var(--border); background: var(--surface); }
+.dash-dia-metric-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; color: var(--text-3); margin-bottom: 4px; }
+.dash-dia-metric-val   { font-size: 16px; font-weight: 700; font-family: var(--font-mono); }
+
+.dash-dia-cats { display: flex; flex-direction: column; gap: 10px; }
+.dash-dia-cat  { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+.dash-dia-cat-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 12px; background: var(--surface-2);
+}
+.dash-dia-cat-total { font-size: 13px; font-weight: 700; font-family: var(--font-mono); }
+.dash-dia-items { padding: 4px 0; }
+.dash-dia-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 7px 12px; border-top: 1px solid var(--border);
+}
+.dash-dia-item-prov { font-size: 12px; color: var(--text-2); }
+.dash-dia-item-val  { font-size: 12px; font-weight: 600; font-family: var(--font-mono); }
+
+/* ── Resumen diario — registro ── */
+.reg-dia-banner {
+  background: var(--green-light);
+  border: 1px solid #9FE1CB;
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.reg-dia-label {
+  font-size: 11px; font-weight: 600; letter-spacing: .3px;
+  color: var(--green-dark); margin-bottom: 1px;
+  display: flex; align-items: center; gap: 5px;
+}
+.reg-dia-row { display: flex; gap: 20px; flex-wrap: wrap; }
+.reg-dia-item { display: flex; flex-direction: column; gap: 1px; }
+.reg-dia-item-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .3px; color: #085041; }
+.reg-dia-item-val   { font-size: 15px; font-weight: 700; font-family: var(--font-mono); }
+.reg-dia-sep { width: 1px; background: #9FE1CB; align-self: stretch; }
+
+@media (max-width: 900px) {
+  .dash-dia-metrics { grid-template-columns: repeat(2, 1fr); }
+}
+
 /* ── Footer app ── */
 .app-footer {
   text-align: center;

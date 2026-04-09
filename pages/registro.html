@@ -69,6 +69,37 @@
     </div>
   </div>
 
+  <!-- Banner resumen del día -->
+  <div id="reg-dia-banner" class="reg-dia-banner" style="display:none">
+    <div>
+      <div class="reg-dia-label">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Hoy
+      </div>
+    </div>
+    <div class="reg-dia-row">
+      <div class="reg-dia-item">
+        <div class="reg-dia-item-label">Ventas</div>
+        <div class="reg-dia-item-val" style="color:var(--green)" id="rd-ventas">$0</div>
+      </div>
+      <div class="reg-dia-sep"></div>
+      <div class="reg-dia-item">
+        <div class="reg-dia-item-label">Gastos</div>
+        <div class="reg-dia-item-val" style="color:var(--red)" id="rd-gastos">$0</div>
+      </div>
+      <div class="reg-dia-sep"></div>
+      <div class="reg-dia-item">
+        <div class="reg-dia-item-label">Compras</div>
+        <div class="reg-dia-item-val" style="color:var(--blue)" id="rd-compras">$0</div>
+      </div>
+      <div class="reg-dia-sep"></div>
+      <div class="reg-dia-item">
+        <div class="reg-dia-item-label">Balance</div>
+        <div class="reg-dia-item-val" id="rd-balance">$0</div>
+      </div>
+    </div>
+  </div>
+
   <div id="tabla-movimientos"></div>
   <div id="tabla-footer"></div>
 </div>
