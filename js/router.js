@@ -2,7 +2,7 @@
 // Orquesta el flujo: login → empresa → app
 // Es el punto de entrada principal que conecta todos los módulos
 
-import { initAuth, loginConGoogle, handleRedirectResult, logout, getInitials } from './auth.js';
+import { initAuth, loginConGoogle, logout, getInitials } from './auth.js';
 import { cargarEmpresaDelUsuario, crearEmpresa, unirseAEmpresa, empresaActual } from './empresa.js';
 import { cargarSubcategorias } from './subcategorias.js';
 import { agregarMovimiento, getMovimientosMes, getMesesConDatos, eliminarMovimiento } from './movimientos.js';
@@ -30,11 +30,7 @@ let mesSelIdx     = 0;  // índice en mesesConDatos
 
 // ── Inicio ─────────────────────────────────────────────────
 export function init() {
-  // Primero capturar el resultado del redirect de Google si venimos de uno
-  handleRedirectResult().then(() => {
-    // Luego iniciar el observador de auth
-    initAuth(onLogin, onLogout);
-  });
+  initAuth(onLogin, onLogout);
   bindLogin();
 }
 
