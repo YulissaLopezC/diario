@@ -564,7 +564,60 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 .dash-empty svg { margin-bottom: 12px; opacity: 0.4; }
 .dash-empty p   { font-size: 13px; margin-top: 6px; }
 
-.dash-header { margin-bottom: 24px; }
+.dash-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.dash-header-actions { display: flex; gap: 10px; align-items: center; margin-top: 4px; }
+.dash-btn-outline {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 16px; border: 1px solid var(--border);
+  border-radius: var(--radius-md); background: var(--surface);
+  font-size: 13px; font-weight: 500; cursor: pointer; color: var(--text);
+  transition: background var(--transition);
+}
+.dash-btn-outline:hover { background: var(--surface-2); }
+.dash-btn-solid {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 16px; border: none;
+  border-radius: var(--radius-md); background: var(--green);
+  color: #fff; font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: background var(--transition);
+}
+.dash-btn-solid:hover { background: var(--green-dark); }
+
+.dash-quick-links {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+.dash-quick-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.dash-quick-card:hover { background: var(--surface-2); }
+.dash-quick-icon {
+  width: 36px; height: 36px;
+  border-radius: var(--radius-md);
+  background: var(--green-light);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.dash-quick-title { font-size: 13px; font-weight: 600; color: var(--text); }
+.dash-quick-sub   { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+
 .dash-label  { font-size: 11px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; color: var(--text-3); margin-bottom: 4px; }
 .dash-title  { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; color: var(--text); }
 

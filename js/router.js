@@ -138,11 +138,18 @@ function bindNav() {
   document.getElementById('nav-dashboard').addEventListener('click', goToDashboard);
   document.getElementById('nav-registro').addEventListener('click', goToRegistro);
   document.getElementById('nav-informes').addEventListener('click', goToInformes);
+
+  // Exponer navegación global para que dashboard.js pueda usarla
+  window.__navTo = (page) => {
+    if (page === 'dashboard') goToDashboard();
+    if (page === 'registro')  goToRegistro();
+    if (page === 'informes')  goToInformes();
+  };
 }
 
 async function goToDashboard() {
   showPage('dashboard');
-  await renderDashboard(empresaCodigo);
+  await renderDashboard(empresaCodigo, empresaActual?.nombre || '');
 }
 
 async function goToRegistro() {
