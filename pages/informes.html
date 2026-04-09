@@ -1,0 +1,50 @@
+<!-- pages/informes.html -->
+
+<div class="card">
+  <div class="card-title">Exportar informe</div>
+
+  <div class="informes-filters">
+    <div class="field">
+      <label for="inf-mes-desde">Desde</label>
+      <select id="inf-mes-desde" class="month-select" style="width:100%">
+        <!-- Llenado por initInformes() -->
+      </select>
+    </div>
+    <div class="field">
+      <label for="inf-mes-hasta">Hasta</label>
+      <select id="inf-mes-hasta" class="month-select" style="width:100%">
+        <!-- Llenado por initInformes() -->
+      </select>
+    </div>
+    <div class="field">
+      <label for="inf-cat">Categoría</label>
+      <select id="inf-cat">
+        <option value="todas">Todas</option>
+        <option value="venta">Ventas</option>
+        <option value="gasto">Gastos</option>
+        <option value="compra">Compras</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>&nbsp;</label>
+      <button class="btn-secondary" id="inf-btn-previa">Ver vista previa</button>
+    </div>
+  </div>
+
+  <div class="export-btns">
+    <button class="btn-secondary" id="inf-btn-csv">⬇ Descargar CSV</button>
+    <button class="btn-secondary" id="inf-btn-excel">⬇ Descargar Excel</button>
+  </div>
+
+  <p class="export-note">
+    Columnas: fecha, categoría, subcategoría, valor, proveedor, N° factura.
+    Compatible con libro fiscal. El archivo Excel usa punto y coma como separador (formato español/colombiano).
+  </p>
+</div>
+
+<div class="card">
+  <div class="card-title">Vista previa</div>
+  <div id="inf-tabla-wrap">
+    <!-- Renderizado por renderVistaPrevia() en informes.js -->
+  </div>
+</div>

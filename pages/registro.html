@@ -1,0 +1,76 @@
+<!-- pages/registro.html -->
+
+<!-- Formulario de entrada rápida -->
+<div class="card">
+  <div class="card-title">Nuevo movimiento</div>
+  <div class="entry-form">
+
+    <div class="field">
+      <label for="inp-fecha">Fecha</label>
+      <input type="text" id="inp-fecha" placeholder="DD/MM/YYYY" maxlength="10" />
+    </div>
+
+    <div class="field">
+      <label for="inp-categoria">Categoría</label>
+      <select id="inp-categoria">
+        <option value="Venta">Venta</option>
+        <option value="Gasto">Gasto</option>
+        <option value="Compra">Compra</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="inp-subcategoria">Subcategoría</label>
+      <select id="inp-subcategoria">
+        <!-- Llenado dinámicamente por router.js -->
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="inp-valor">Valor</label>
+      <input type="number" id="inp-valor" placeholder="0" min="0" step="any" />
+    </div>
+
+    <div class="field">
+      <label for="inp-proveedor">Proveedor <span style="color:var(--text-3)">(opcional)</span></label>
+      <input type="text" id="inp-proveedor" placeholder="Nombre" />
+    </div>
+
+    <div class="field">
+      <label for="inp-factura">N° Factura <span style="color:var(--text-3)">(opcional)</span></label>
+      <input type="text" id="inp-factura" placeholder="FC-0001" />
+    </div>
+
+    <div class="field">
+      <label>&nbsp;</label>
+      <button class="btn-add" id="btn-agregar">+ Agregar</button>
+    </div>
+
+  </div>
+  <p class="entry-hint">
+    Presiona <strong>Enter</strong> en el último campo o haz clic en <strong>+ Agregar</strong>.
+    El registro se guardará en el mes de la fecha ingresada.
+  </p>
+</div>
+
+<!-- Tabla de movimientos por mes -->
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+    <div class="card-title" style="margin:0">Movimientos</div>
+    <div class="month-nav">
+      <button class="month-arrow" id="btn-mes-prev" title="Mes anterior">&#8249;</button>
+      <select class="month-select" id="sel-mes">
+        <!-- Llenado dinámicamente -->
+      </select>
+      <button class="month-arrow" id="btn-mes-next" title="Mes siguiente">&#8250;</button>
+    </div>
+  </div>
+
+  <div id="tabla-movimientos">
+    <!-- Renderizado por renderTabla() en router.js -->
+  </div>
+
+  <div id="tabla-footer">
+    <!-- Totales renderizados por renderTabla() -->
+  </div>
+</div>
