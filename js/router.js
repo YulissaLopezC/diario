@@ -637,6 +637,12 @@ function mostrarFlujoEmpresa(user) {
   document.getElementById('inp-codigo-empresa').addEventListener('keydown', e => {
     if (e.key === 'Enter') document.getElementById('btn-unirse-empresa').click();
   });
+
+  // Cerrar sesión desde esta pantalla
+  document.getElementById('btn-logout-empresa')?.addEventListener('click', async () => {
+    screen.classList.add('hidden');
+    await logout();
+  });
 }
 
 // ── Bind login ─────────────────────────────────────────────
