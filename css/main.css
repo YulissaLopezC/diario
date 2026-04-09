@@ -854,6 +854,59 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   .dash-dia-metrics { grid-template-columns: repeat(2, 1fr); }
 }
 
+/* ── Selector de empresa ── */
+.btn-empresa-sel {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+  text-align: left;
+}
+.btn-empresa-sel:hover {
+  background: var(--green-light);
+  border-color: var(--green);
+}
+.btn-empresa-nombre {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.btn-empresa-codigo {
+  font-size: 11px;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+}
+
+/* ── User menu empresa actualizado ── */
+.user-menu-empresa-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .4px;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 3px;
+}
+.user-menu-empresa-nombre {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.user-menu-empresa-codigo {
+  font-size: 11px;
+  color: var(--text-3);
+  margin-top: 1px;
+}
+.user-menu-section {
+  border-top: 1px solid var(--border);
+  padding-top: 4px;
+}
+
 /* ── Footer app ── */
 .app-footer {
   text-align: center;

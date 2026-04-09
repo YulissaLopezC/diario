@@ -3,7 +3,7 @@
 // Es el punto de entrada principal que conecta todos los módulos
 
 import { initAuth, loginConGoogle, logout, getInitials } from './auth.js';
-import { cargarEmpresaDelUsuario, crearEmpresa, unirseAEmpresa, empresaActual } from './empresa.js';
+import { cargarEmpresasDelUsuario, crearEmpresa, unirseAEmpresa, empresaActual, misEmpresas, setEmpresaActual } from './empresa.js';
 import { cargarSubcategorias } from './subcategorias.js';
 import { agregarMovimiento, getMovimientosMes, getMesesConDatos, eliminarMovimiento, getMovimientosDia } from './movimientos.js';
 import { renderDashboard } from './dashboard.js';
@@ -32,16 +32,24 @@ async function onLogin(user) {
   showLoader();
 
   try {
-    const empresa = await cargarEmpresaDelUsuario(user.uid);
+    const empresas = await cargarEmpresasDelUsuario(user.uid);
 
-    if (!empresa) {
-      // Primera vez: mostrar flujo de empresa
+    if (!empresas.length) {
       hideLoader();
       mostrarFlujoEmpresa(user);
       return;
     }
 
-    empresaCodigo = empresa.codigo;
+    // Si tiene varias empresas mostrar selector, si tiene una entrar directo
+    if (empresas.length > 1) {
+      hideLoader();
+      mostrarSelectorEmpresa(empresas, user);
+      return;
+    }
+
+    // Una sola empresa — entrar directo
+    empresaCodigo = empresas[0].codigo;
+    setEmpresaActual(empresaCodigo);
     await cargarSubcategorias(empresaCodigo);
     await iniciarApp();
   } catch (err) {
@@ -96,7 +104,17 @@ function toggleUserMenu() {
   let menu = document.getElementById('user-menu');
   if (menu) { menu.remove(); return; }
 
-  const empresa = empresaActual; // importado de empresa.js
+  const empresa = empresaActual;
+  const tieneVarias = misEmpresas.length > 1;
+
+  // Generar opciones de cambio de empresa si tiene varias
+  const otrasEmpresas = misEmpresas
+    .filter(e => e.codigo !== empresa?.codigo)
+    .map(e => `
+      <button class="user-menu-btn" data-codigo="${e.codigo}">
+        Cambiar a <strong>${toSentenceCase(e.nombre)}</strong>
+      </button>`).join('');
+
   menu = document.createElement('div');
   menu.id = 'user-menu';
   menu.className = 'user-menu';
@@ -106,14 +124,71 @@ function toggleUserMenu() {
       <div class="user-menu-email">${userActual.email}</div>
     </div>
     <div class="user-menu-empresa">
-      Empresa: <strong>${toSentenceCase(empresa?.nombre || '')}</strong><br/>
-      Código: <strong>${empresa?.codigo || ''}</strong>
+      <div class="user-menu-empresa-label">Empresa activa</div>
+      <div class="user-menu-empresa-nombre">${toSentenceCase(empresa?.nombre || '')}</div>
+      <div class="user-menu-empresa-codigo">Código: ${empresa?.codigo || ''}</div>
     </div>
+    ${tieneVarias ? `<div class="user-menu-section">${otrasEmpresas}</div>` : ''}
+    <button class="user-menu-btn" id="btn-unirse-nueva">+ Unirme a otro local</button>
     <button class="user-menu-btn danger" id="btn-logout">Cerrar sesión</button>
   `;
   document.body.appendChild(menu);
+
   document.getElementById('btn-logout').addEventListener('click', logout);
+
+  // Botón unirse a otra empresa
+  document.getElementById('btn-unirse-nueva')?.addEventListener('click', () => {
+    menu.remove();
+    mostrarModalUnirse();
+  });
+
+  // Botones de cambio de empresa
+  menu.querySelectorAll('[data-codigo]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const codigo = btn.dataset.codigo;
+      menu.remove();
+      showLoader();
+      setEmpresaActual(codigo);
+      empresaCodigo = codigo;
+      await cargarSubcategorias(codigo);
+      await goToDashboard();
+      hideLoader();
+      toast(`Cambiado a ${toSentenceCase(empresaActual?.nombre || '')}.`);
+    });
+  });
+
   setTimeout(() => document.addEventListener('click', cerrarMenuUsuario), 10);
+}
+
+// ── Modal para unirse a otra empresa desde el menú ─────────
+function mostrarModalUnirse() {
+  showModal({
+    title: 'Unirme a otro local',
+    description: 'Ingresa el código del local al que quieres unirte:',
+    placeholder: 'Ej: CAFET-1234',
+    confirmText: 'Unirme',
+    onConfirm: async (codigo) => {
+      showLoader();
+      try {
+        const empresa = await unirseAEmpresa(
+          codigo,
+          userActual.uid,
+          userActual.email,
+          userActual.displayName || ''
+        );
+        if (!empresa) { hideLoader(); return; }
+        await cargarSubcategorias(empresa.codigo);
+        empresaCodigo = empresa.codigo;
+        await goToDashboard();
+        hideLoader();
+        toast(`Bienvenido a ${toSentenceCase(empresa.nombre)}.`);
+      } catch (err) {
+        console.error(err);
+        hideLoader();
+        toast('Error al unirse. Verifica el código.', 'error');
+      }
+    }
+  });
 }
 
 function cerrarMenuUsuario(e) {
@@ -462,6 +537,67 @@ function prependarFilaTabla(m) {
   renderPagina();
 }
 
+// ── Selector de empresa (cuando tiene varias al iniciar) ───
+function mostrarSelectorEmpresa(empresas, user) {
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('topbar').classList.add('hidden');
+  document.getElementById('app').classList.add('hidden');
+
+  // Reusar empresa-screen con contenido dinámico
+  const screen = document.getElementById('empresa-screen');
+  screen.classList.remove('hidden');
+
+  // Reemplazar contenido del card
+  const card = screen.querySelector('.login-card');
+  card.innerHTML = `
+    <div class="login-logo">Diar<span>IO</span></div>
+    <p class="login-sub" style="margin-bottom:20px">¿A cuál local quieres entrar?</p>
+    <div id="selector-empresas" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+      ${empresas.map(e => `
+        <button class="btn-empresa-sel" data-codigo="${e.codigo}">
+          <span class="btn-empresa-nombre">${toSentenceCase(e.nombre)}</span>
+          <span class="btn-empresa-codigo">${e.codigo}</span>
+        </button>`).join('')}
+    </div>
+    <div class="divider"><hr /><span>o</span><hr /></div>
+    <input type="text" id="inp-codigo-empresa" class="login-code-input" placeholder="Unirme a otro local con código" style="margin-bottom:6px"/>
+    <button class="btn-secondary" id="btn-unirse-empresa" style="width:100%;height:36px">Unirme</button>
+    <p class="login-note">Selecciona un local para continuar.</p>
+  `;
+
+  // Botones de selección
+  card.querySelectorAll('.btn-empresa-sel').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      showLoader();
+      const codigo = btn.dataset.codigo;
+      setEmpresaActual(codigo);
+      empresaCodigo = codigo;
+      await cargarSubcategorias(codigo);
+      screen.classList.add('hidden');
+      await iniciarApp();
+    });
+  });
+
+  // Unirse a otra empresa
+  card.querySelector('#btn-unirse-empresa')?.addEventListener('click', async () => {
+    const codigo = card.querySelector('#inp-codigo-empresa').value.trim();
+    if (!codigo) { toast('Ingresa el código del local.', 'error'); return; }
+    showLoader();
+    try {
+      const empresa = await unirseAEmpresa(codigo, user.uid, user.email, user.displayName || '');
+      if (!empresa) { hideLoader(); return; }
+      await cargarSubcategorias(empresa.codigo);
+      empresaCodigo = empresa.codigo;
+      screen.classList.add('hidden');
+      await iniciarApp();
+    } catch (err) {
+      console.error(err);
+      hideLoader();
+      toast('Error al unirse.', 'error');
+    }
+  });
+}
+
 // ── Flujo de empresa (primer login) ───────────────────────
 function mostrarFlujoEmpresa(user) {
   document.getElementById('login-screen').classList.add('hidden');
@@ -471,36 +607,44 @@ function mostrarFlujoEmpresa(user) {
   const screen = document.getElementById('empresa-screen');
   screen.classList.remove('hidden');
 
+  // Limpiar listeners previos clonando los botones
+  ['btn-crear-empresa','btn-unirse-empresa'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (btn) btn.replaceWith(btn.cloneNode(true));
+  });
+
   document.getElementById('btn-crear-empresa').addEventListener('click', async () => {
     const nombre = document.getElementById('inp-nombre-empresa').value.trim();
-    if (!nombre) { toast('Ingresa el nombre de tu empresa.', 'error'); return; }
+    if (!nombre) { toast('Ingresa el nombre de tu local.', 'error'); return; }
     showLoader();
     try {
-      await crearEmpresa(nombre, user.uid, user.email, user.displayName || '');
-      await cargarSubcategorias(empresaCodigo || (await cargarEmpresaDelUsuario(user.uid))?.codigo);
+      const empresa = await crearEmpresa(nombre, user.uid, user.email, user.displayName || '');
+      empresaCodigo = empresa.codigo;
+      await cargarSubcategorias(empresaCodigo);
       screen.classList.add('hidden');
-      await onLogin(user);
+      await iniciarApp();
     } catch (err) {
       console.error(err);
       hideLoader();
-      toast('Error al crear empresa.', 'error');
+      toast('Error al crear el local.', 'error');
     }
   });
 
   document.getElementById('btn-unirse-empresa').addEventListener('click', async () => {
     const codigo = document.getElementById('inp-codigo-empresa').value.trim();
-    if (!codigo) { toast('Ingresa el código de la empresa.', 'error'); return; }
+    if (!codigo) { toast('Ingresa el código del local.', 'error'); return; }
     showLoader();
     try {
       const empresa = await unirseAEmpresa(codigo, user.uid, user.email, user.displayName || '');
       if (!empresa) { hideLoader(); return; }
+      empresaCodigo = empresa.codigo;
       await cargarSubcategorias(empresa.codigo);
       screen.classList.add('hidden');
-      await onLogin(user);
+      await iniciarApp();
     } catch (err) {
       console.error(err);
       hideLoader();
-      toast('Error al unirse a la empresa.', 'error');
+      toast('Error al unirse al local.', 'error');
     }
   });
 }
