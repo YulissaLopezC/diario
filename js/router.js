@@ -4,8 +4,8 @@
 
 import { initAuth, loginConGoogle, handleRedirectResult, logout, getInitials } from './auth.js';
 import { cargarEmpresaDelUsuario, crearEmpresa, unirseAEmpresa, empresaActual } from './empresa.js';
-import { cargarSubcategorias, getSubcategorias, agregarSubcategoria } from './subcategorias.js';
-import { agregarMovimiento, getMovimientosMes, getMesesConDatos } from './movimientos.js';
+import { cargarSubcategorias } from './subcategorias.js';
+import { agregarMovimiento, getMovimientosMes, getMesesConDatos, eliminarMovimiento } from './movimientos.js';
 import { renderDashboard } from './dashboard.js';
 import { initInformes } from './informes.js';
 import {
@@ -13,6 +13,14 @@ import {
   showModal, showConfirm, formatCOP, labelMes,
   claveMes, parseFecha, hoy, toSentenceCase, emptyState
 } from './ui.js';
+
+// ── hoyISO: fecha de hoy en formato YYYY-MM-DD ─────────────
+function hoyISO() {
+  const d  = new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
 
 // ── Estado local ───────────────────────────────────────────
 let userActual    = null;
@@ -153,102 +161,65 @@ async function goToInformes() {
 
 // ── Pantalla de Registro ───────────────────────────────────
 async function initRegistro() {
-  // Inicializar campo de fecha
-  document.getElementById('inp-fecha').value = hoy();
+  // Fecha de hoy en formato YYYY-MM-DD (requerido por input type=date)
+  const inpFecha = document.getElementById('inp-fecha');
+  inpFecha.value = hoyISO();
 
-  // Cargar subcategorías en el select de categoría
-  const selCat = document.getElementById('inp-categoria');
-  const selSub = document.getElementById('inp-subcategoria');
-
-  selCat.addEventListener('change', () => actualizarSubcats(selCat.value, selSub));
-  actualizarSubcats(selCat.value, selSub);
-
-  // Formato de número con puntos mientras escribe (ej: 20.000)
+  // Formato de número con puntos mientras escribe
   const inpValor = document.getElementById('inp-valor');
   inpValor.addEventListener('input', () => {
     const raw = inpValor.value.replace(/\./g, '').replace(/[^0-9]/g, '');
-    if (raw === '') { inpValor.value = ''; return; }
-    inpValor.value = parseInt(raw, 10).toLocaleString('es-CO');
+    inpValor.value = raw ? parseInt(raw, 10).toLocaleString('es-CO') : '';
   });
 
-  // Evento "agregar" — botón y Enter en último campo
-  document.getElementById('btn-agregar').addEventListener('click', agregarMovimientoUI);
+  // Enter en valor o factura → agregar
+  inpValor.addEventListener('keydown',  e => { if (e.key === 'Enter') agregarMovimientoUI(); });
   document.getElementById('inp-factura').addEventListener('keydown', e => {
     if (e.key === 'Enter') agregarMovimientoUI();
   });
-  // También Enter desde el campo valor (cuando factura está oculto)
-  inpValor.addEventListener('keydown', e => {
-    if (e.key === 'Enter') agregarMovimientoUI();
-  });
+  document.getElementById('btn-agregar').addEventListener('click', agregarMovimientoUI);
 
-  // Cargar meses y tabla
   await recargarMeses();
 }
 
-function actualizarSubcats(categoria, selSub) {
-  const subs = getSubcategorias(categoria);
-  selSub.innerHTML = subs
-    .map(s => `<option value="${s}">${s}</option>`)
-    .join('') + '<option value="__nueva__">+ Nueva subcategoría...</option>';
-}
 
 async function agregarMovimientoUI() {
-  const fecha    = document.getElementById('inp-fecha').value.trim();
+  const fechaISO = document.getElementById('inp-fecha').value;           // "YYYY-MM-DD"
   const cat      = document.getElementById('inp-categoria').value;
-  let   sub      = document.getElementById('inp-subcategoria').value;
-  // Limpiar puntos de miles antes de parsear
   const valorRaw = document.getElementById('inp-valor').value.replace(/\./g, '').trim();
   const prov     = document.getElementById('inp-proveedor').value.trim();
   const factura  = document.getElementById('inp-factura').value.trim();
 
-  // ¿Nueva subcategoría?
-  if (sub === '__nueva__') {
-    showModal({
-      title: 'Nueva subcategoría',
-      description: `Ingresa el nombre para la subcategoría de "${cat}":`,
-      placeholder: 'Ej: Domicilio, Nómina...',
-      confirmText: 'Crear',
-      onConfirm: async (nombre) => {
-        const ok = await agregarSubcategoria(empresaCodigo, cat, nombre);
-        if (ok) {
-          toast(`Subcategoría "${toSentenceCase(nombre)}" creada.`);
-          const selSub = document.getElementById('inp-subcategoria');
-          actualizarSubcats(cat, selSub);
-          selSub.value = toSentenceCase(nombre);
-        } else {
-          toast('Esa subcategoría ya existe.', 'info');
-        }
-      }
-    });
-    return;
-  }
-
-  // Validaciones
-  if (!fecha) { toast('Ingresa la fecha.', 'error'); return; }
-  if (!parseFecha(fecha)) { toast('Formato de fecha: DD/MM/YYYY', 'error'); return; }
+  if (!fechaISO) { toast('Selecciona una fecha.', 'error'); return; }
   if (!valorRaw || isNaN(parseFloat(valorRaw))) {
     toast('Ingresa un valor válido.', 'error'); return;
   }
 
+  // Convertir YYYY-MM-DD → DD/MM/YYYY para mostrar y guardar
+  const [anio, mes, dia] = fechaISO.split('-');
+  const fechaDisplay = `${dia}/${mes}/${anio}`;
+
   try {
     const mov = await agregarMovimiento(empresaCodigo, userActual.uid, {
-      fecha, categoria: cat, subcategoria: sub, valor: valorRaw, proveedor: prov, factura
+      fecha: fechaDisplay,
+      categoria: cat,
+      subcategoria: '',
+      valor: valorRaw,
+      proveedor: prov,
+      factura
     });
 
     toast('Movimiento guardado.');
     limpiarFormulario();
 
-    // Si el mes del registro coincide con el mes que se está viendo, agregar a la tabla
-    const parsed = parseFecha(fecha);
-    if (parsed && mesesConDatos.length > 0) {
-      const claveReg = claveMes(parsed.mes, parsed.anio);
-      const claveVista = mesesConDatos[mesSelIdx];
-      if (claveReg === claveVista) {
-        prependarFilaTabla(mov);
-      }
+    // Si el mes del registro coincide con el mes visible, agregar fila
+    const claveReg   = `${anio}-${mes}`;
+    const claveVista = mesesConDatos[mesSelIdx];
+    if (claveReg === claveVista) {
+      prependarFilaTabla(mov);
+      actualizarFooter();
     }
 
-    // Actualizar lista de meses disponibles
     await recargarMeses();
 
   } catch (err) {
@@ -258,10 +229,10 @@ async function agregarMovimientoUI() {
 }
 
 function limpiarFormulario() {
-  document.getElementById('inp-fecha').value    = hoy();
-  document.getElementById('inp-valor').value    = '';
-  document.getElementById('inp-proveedor').value= '';
-  document.getElementById('inp-factura').value  = '';
+  document.getElementById('inp-fecha').value     = hoyISO();
+  document.getElementById('inp-valor').value     = '';
+  document.getElementById('inp-proveedor').value = '';
+  document.getElementById('inp-factura').value   = '';
   document.getElementById('inp-categoria').focus();
 }
 
@@ -336,13 +307,18 @@ async function renderTabla() {
     if (cat === 'gasto')  totalGasto  += m.valor;
     if (cat === 'compra') totalCompra += m.valor;
 
-    return `<tr>
+    const prov    = m.proveedor ? toSentenceCase(m.proveedor) : '<span style="color:var(--text-3)">—</span>';
+    const factura = m.factura   || '<span style="color:var(--text-3)">—</span>';
+
+    return `<tr data-id="${m.id}" data-cat="${cat}" data-valor="${m.valor}">
       <td>${m.fecha}</td>
       <td><span class="badge badge-${cat}">${toSentenceCase(m.categoria)}</span></td>
-      <td>${toSentenceCase(m.subcategoria)}</td>
-      <td>${m.proveedor ? toSentenceCase(m.proveedor) : '<span style="color:var(--text-3)">—</span>'}</td>
-      <td style="font-family:var(--font-mono);font-size:12px">${m.factura || '<span style="color:var(--text-3)">—</span>'}</td>
+      <td>${prov}</td>
+      <td style="font-family:var(--font-mono);font-size:12px">${factura}</td>
       <td class="amount ${cat}">${formatCOP(m.valor)}</td>
+      <td style="width:32px;text-align:center">
+        <button class="btn-del" title="Eliminar" onclick="window.__delMov('${m.id}')">&#x2715;</button>
+      </td>
     </tr>`;
   }).join('');
 
@@ -351,20 +327,62 @@ async function renderTabla() {
       <table>
         <thead>
           <tr>
-            <th>Fecha</th><th>Categoría</th><th>Subcategoría</th>
-            <th>Proveedor</th><th>N° Factura</th><th style="text-align:right">Valor</th>
+            <th>Fecha</th><th>Categoría</th><th>Proveedor</th>
+            <th>N° Factura</th><th style="text-align:right">Valor</th><th></th>
           </tr>
         </thead>
         <tbody>${filas}</tbody>
       </table>
     </div>`;
 
+  renderFooterTotales(totalVenta, totalGasto, totalCompra);
+
+  // Exponer función global para el onclick inline
+  window.__delMov = (id) => confirmarEliminar(id);
+}
+
+function renderFooterTotales(v, g, c) {
   document.getElementById('tabla-footer').innerHTML = `
     <div class="table-footer">
-      <span style="color:var(--green)">Ventas: ${formatCOP(totalVenta)}</span>
-      <span style="color:var(--red)">Gastos: ${formatCOP(totalGasto)}</span>
-      <span style="color:var(--blue)">Compras: ${formatCOP(totalCompra)}</span>
+      <span style="color:var(--green)">Ventas: ${formatCOP(v)}</span>
+      <span style="color:var(--red)">Gastos: ${formatCOP(g)}</span>
+      <span style="color:var(--blue)">Compras: ${formatCOP(c)}</span>
     </div>`;
+}
+
+function actualizarFooter() {
+  const rows = document.querySelectorAll('#tabla-movimientos tbody tr');
+  let v = 0, g = 0, c = 0;
+  rows.forEach(r => {
+    const cat   = r.dataset.cat;
+    const valor = parseFloat(r.dataset.valor) || 0;
+    if (cat === 'venta')  v += valor;
+    if (cat === 'gasto')  g += valor;
+    if (cat === 'compra') c += valor;
+  });
+  renderFooterTotales(v, g, c);
+}
+
+function confirmarEliminar(movId) {
+  showConfirm({
+    title: '¿Eliminar movimiento?',
+    description: 'Esta acción no se puede deshacer.',
+    confirmText: 'Sí, eliminar',
+    danger: true,
+    onConfirm: async () => {
+      try {
+        await eliminarMovimiento(empresaCodigo, movId);
+        // Quitar fila del DOM sin recargar todo
+        const tr = document.querySelector(`tr[data-id="${movId}"]`);
+        if (tr) tr.remove();
+        actualizarFooter();
+        toast('Movimiento eliminado.');
+      } catch (err) {
+        console.error(err);
+        toast('Error al eliminar.', 'error');
+      }
+    }
+  });
 }
 
 // Agregar fila al inicio de la tabla sin recargar todo
@@ -372,14 +390,19 @@ function prependarFilaTabla(m) {
   const tbody = document.querySelector('#tabla-movimientos tbody');
   if (!tbody) return;
   const cat = (m.categoria || '').toLowerCase();
-  const tr = document.createElement('tr');
+  const tr  = document.createElement('tr');
+  tr.dataset.id    = m.id;
+  tr.dataset.cat   = cat;
+  tr.dataset.valor = m.valor;
   tr.innerHTML = `
     <td>${m.fecha}</td>
     <td><span class="badge badge-${cat}">${toSentenceCase(m.categoria)}</span></td>
-    <td>${toSentenceCase(m.subcategoria)}</td>
     <td>${m.proveedor ? toSentenceCase(m.proveedor) : '<span style="color:var(--text-3)">—</span>'}</td>
     <td style="font-family:var(--font-mono);font-size:12px">${m.factura || '<span style="color:var(--text-3)">—</span>'}</td>
-    <td class="amount ${cat}">${formatCOP(m.valor)}</td>`;
+    <td class="amount ${cat}">${formatCOP(m.valor)}</td>
+    <td style="width:32px;text-align:center">
+      <button class="btn-del" title="Eliminar" onclick="window.__delMov('${m.id}')">&#x2715;</button>
+    </td>`;
   tbody.insertBefore(tr, tbody.firstChild);
 }
 

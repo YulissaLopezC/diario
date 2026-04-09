@@ -1,13 +1,13 @@
 <!-- pages/registro.html -->
 
-<!-- Formulario de entrada rápida -->
-<div class="card">
+<!-- Formulario de entrada rápida — centrado -->
+<div class="card entry-card">
   <div class="card-title">Nuevo movimiento</div>
   <div class="entry-form">
 
     <div class="field">
       <label for="inp-fecha">Fecha</label>
-      <input type="text" id="inp-fecha" placeholder="DD/MM/YYYY" maxlength="10" />
+      <input type="date" id="inp-fecha" />
     </div>
 
     <div class="field">
@@ -16,14 +16,6 @@
         <option value="Venta">Venta</option>
         <option value="Gasto">Gasto</option>
         <option value="Compra">Compra</option>
-      </select>
-    </div>
-
-    <!-- Subcategoría oculta temporalmente -->
-    <div class="field" id="field-subcategoria" style="display:none">
-      <label for="inp-subcategoria">Subcategoría</label>
-      <select id="inp-subcategoria">
-        <!-- Llenado dinámicamente por router.js -->
       </select>
     </div>
 
@@ -66,18 +58,16 @@
     <div class="card-title" style="margin:0">Movimientos</div>
     <div class="month-nav">
       <button class="month-arrow" id="btn-mes-prev" title="Mes anterior">&#8249;</button>
-      <select class="month-select" id="sel-mes">
-        <!-- Llenado dinámicamente -->
-      </select>
+      <select class="month-select" id="sel-mes"></select>
       <button class="month-arrow" id="btn-mes-next" title="Mes siguiente">&#8250;</button>
     </div>
   </div>
 
-  <div id="tabla-movimientos">
-    <!-- Renderizado por renderTabla() en router.js -->
-  </div>
-
-  <div id="tabla-footer">
-    <!-- Totales renderizados por renderTabla() -->
-  </div>
+  <div id="tabla-movimientos"></div>
+  <div id="tabla-footer"></div>
 </div>
+
+<!-- Footer -->
+<footer class="app-footer">
+  Chiripa Company &mdash; DiarIO
+</footer>

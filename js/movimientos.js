@@ -3,7 +3,7 @@
 
 import {
   collection, addDoc, query, where,
-  getDocs, Timestamp
+  getDocs, Timestamp, doc, deleteDoc
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { db } from './firebase.js';
 import { toUpperStorage, claveMes, parseFecha } from './ui.js';
@@ -67,8 +67,11 @@ export async function getMesesConDatos(empresaCodigo) {
   return [...claves].sort().reverse(); // más reciente primero
 }
 
-// ── Leer todos los movimientos (para dashboard anual) ──────
-export async function getTodosMovimientos(empresaCodigo) {
+// ── Eliminar un movimiento ─────────────────────────────────
+export async function eliminarMovimiento(empresaCodigo, movId) {
+  const ref = doc(db, 'empresas', empresaCodigo, 'movimientos', movId);
+  await deleteDoc(ref);
+}
   const snap = await getDocs(refMovimientos(empresaCodigo));
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }

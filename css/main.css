@@ -213,13 +213,7 @@ tbody tr:hover td { background: var(--bg); }
 }
 .table-footer span { font-size: 12px; font-weight: 600; font-family: var(--font-mono); }
 
-/* ── Entry form ── */
-.entry-form {
-  display: grid;
-  grid-template-columns: 110px 120px 150px 110px 130px 130px auto;
-  gap: 10px;
-  align-items: end;
-}
+/* .entry-form — definido más abajo con flex wrap */
 .field label { display: block; font-size: 11px; font-weight: 500; color: var(--text-2); margin-bottom: 4px; }
 .field input,
 .field select {
@@ -429,6 +423,89 @@ tbody tr:hover td { background: var(--bg); }
   z-index: 400; font-size: 20px; font-weight: 600; letter-spacing: -0.3px;
 }
 #loader span { color: var(--green); }
+
+/* ── Entry card centrada ── */
+.entry-card {
+  max-width: 860px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.entry-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  justify-content: center;
+}
+.entry-form .field {
+  flex: 1 1 130px;
+  min-width: 100px;
+  max-width: 160px;
+}
+.entry-form .field:last-child {
+  flex: 0 0 auto;
+  max-width: none;
+}
+
+/* ── Date input ── */
+input[type="date"] {
+  width: 100%;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font);
+  outline: none;
+  cursor: pointer;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+input[type="date"]:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(29,158,117,0.12);
+}
+input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0.5;
+  cursor: pointer;
+}
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+/* ── Botón eliminar fila ── */
+.btn-del {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: none;
+  color: var(--text-3);
+  cursor: pointer;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: background var(--transition), color var(--transition);
+  padding: 0;
+}
+.btn-del:hover {
+  background: var(--red-light);
+  color: var(--red);
+}
+
+/* ── Footer ── */
+.app-footer {
+  text-align: center;
+  padding: 20px;
+  font-size: 11px;
+  color: var(--text-3);
+  letter-spacing: .3px;
+  margin-top: 8px;
+}
 
 /* ── Responsive ── */
 @media (max-width: 900px) {
