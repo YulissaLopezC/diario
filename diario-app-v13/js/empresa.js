@@ -142,17 +142,3 @@ export function getRolUsuario(userId) {
   const u = empresaActual.usuarios?.find(u => u.uid === userId);
   return u?.rol || null;
 }
-
-// ── Crear empresa desde consola (solo para admin) ──────────
-// Uso: en la consola del navegador ejecuta:
-// await window.__crearEmpresa("Nombre del Local")
-// Te devuelve el código para compartir con los usuarios
-export function exposeAdminTools(userId, userEmail, userName) {
-  window.__crearEmpresa = async (nombre) => {
-    const empresa = await crearEmpresa(nombre, userId, userEmail, userName);
-    console.log(`✅ Empresa creada: "${empresa.nombre}"`);
-    console.log(`📋 Código para compartir: ${empresa.codigo}`);
-    return empresa;
-  };
-  console.log('🔧 Herramientas admin disponibles: window.__crearEmpresa("Nombre")');
-}

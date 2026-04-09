@@ -3,7 +3,7 @@
 // Es el punto de entrada principal que conecta todos los módulos
 
 import { initAuth, loginConGoogle, logout, getInitials } from './auth.js';
-import { cargarEmpresasDelUsuario, crearEmpresa, unirseAEmpresa, empresaActual, misEmpresas, setEmpresaActual, exposeAdminTools } from './empresa.js';
+import { cargarEmpresasDelUsuario, crearEmpresa, unirseAEmpresa, empresaActual, misEmpresas, setEmpresaActual } from './empresa.js';
 import { cargarSubcategorias } from './subcategorias.js';
 import { agregarMovimiento, getMovimientosMes, getMesesConDatos, eliminarMovimiento, getMovimientosDia } from './movimientos.js';
 import { renderDashboard } from './dashboard.js';
@@ -18,7 +18,7 @@ import {
 let userActual    = null;
 let empresaCodigo = null;
 let mesesConDatos = [];
-let mesSelIdx     = 0;
+let mesSelIdx     = 0;  // índice en mesesConDatos
 
 // ── Inicio ─────────────────────────────────────────────────
 export function init() {
@@ -61,9 +61,9 @@ async function onLogin(user) {
 
 // ── Flujo al hacer logout ──────────────────────────────────
 function onLogout() {
-  userActual     = null;
-  empresaCodigo  = null;
-  mesesConDatos  = [];
+  userActual    = null;
+  empresaCodigo = null;
+  mesesConDatos = [];
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('topbar').classList.add('hidden');
   document.getElementById('app').classList.add('hidden');
@@ -93,13 +93,11 @@ function renderTopbar() {
     ? `<img src="${foto}" alt="foto" />`
     : getInitials(userActual.displayName || userActual.email);
 
-  // Reemplazar el chip para limpiar listeners acumulados
-  const nuevoChip = chip.cloneNode(true);
-  chip.parentNode.replaceChild(nuevoChip, chip);
-  nuevoChip.querySelector('.user-avatar').innerHTML = avatarHtml;
-  nuevoChip.querySelector('.user-name').textContent =
+  chip.querySelector('.user-avatar').innerHTML = avatarHtml;
+  chip.querySelector('.user-name').textContent =
     (userActual.displayName || userActual.email).split(' ')[0];
-  nuevoChip.addEventListener('click', toggleUserMenu);
+
+  chip.addEventListener('click', toggleUserMenu);
 }
 
 function toggleUserMenu() {
@@ -153,7 +151,6 @@ function toggleUserMenu() {
       setEmpresaActual(codigo);
       empresaCodigo = codigo;
       await cargarSubcategorias(codigo);
-      renderTopbar();
       await goToDashboard();
       hideLoader();
       toast(`Cambiado a ${toSentenceCase(empresaActual?.nombre || '')}.`);
@@ -601,7 +598,7 @@ function mostrarSelectorEmpresa(empresas, user) {
   });
 }
 
-// ── Flujo de empresa (primer login — solo unirse con código) ─
+// ── Flujo de empresa (primer login) ───────────────────────
 function mostrarFlujoEmpresa(user) {
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('topbar').classList.add('hidden');
@@ -610,10 +607,28 @@ function mostrarFlujoEmpresa(user) {
   const screen = document.getElementById('empresa-screen');
   screen.classList.remove('hidden');
 
-  // Limpiar listener previo
-  const btn = document.getElementById('btn-unirse-empresa');
-  const btnNuevo = btn.cloneNode(true);
-  btn.parentNode.replaceChild(btnNuevo, btn);
+  // Limpiar listeners previos clonando los botones
+  ['btn-crear-empresa','btn-unirse-empresa'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (btn) btn.replaceWith(btn.cloneNode(true));
+  });
+
+  document.getElementById('btn-crear-empresa').addEventListener('click', async () => {
+    const nombre = document.getElementById('inp-nombre-empresa').value.trim();
+    if (!nombre) { toast('Ingresa el nombre de tu local.', 'error'); return; }
+    showLoader();
+    try {
+      const empresa = await crearEmpresa(nombre, user.uid, user.email, user.displayName || '');
+      empresaCodigo = empresa.codigo;
+      await cargarSubcategorias(empresaCodigo);
+      screen.classList.add('hidden');
+      await iniciarApp();
+    } catch (err) {
+      console.error(err);
+      hideLoader();
+      toast('Error al crear el local.', 'error');
+    }
+  });
 
   document.getElementById('btn-unirse-empresa').addEventListener('click', async () => {
     const codigo = document.getElementById('inp-codigo-empresa').value.trim();
@@ -631,11 +646,6 @@ function mostrarFlujoEmpresa(user) {
       hideLoader();
       toast('Error al unirse al local.', 'error');
     }
-  });
-
-  // Enter en el input también dispara
-  document.getElementById('inp-codigo-empresa').addEventListener('keydown', e => {
-    if (e.key === 'Enter') document.getElementById('btn-unirse-empresa').click();
   });
 }
 

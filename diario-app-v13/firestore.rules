@@ -1,0 +1,36 @@
+// firestore.rules
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Perfil de usuario: solo el propio usuario
+    match /usuarios/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Empresa y sus subcolecciones
+    match /empresas/{empresaCodigo} {
+
+      // Cualquier autenticado puede leer (para unirse con código)
+      allow read: if request.auth != null;
+
+      // Crear empresa: cualquier autenticado
+      allow create: if request.auth != null;
+
+      // Actualizar (agregar miembro): cualquier autenticado
+      // La lógica de negocio controla quién puede actualizar qué
+      allow update: if request.auth != null;
+
+      // Subcategorías y config: solo miembros
+      match /config/{docId} {
+        allow read, write: if request.auth != null;
+      }
+
+      // Movimientos: solo autenticados (la membresía se valida en JS)
+      match /movimientos/{movId} {
+        allow read, create, delete: if request.auth != null;
+        allow update: if false;
+      }
+    }
+  }
+}

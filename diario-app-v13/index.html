@@ -37,8 +37,21 @@
   <div id="empresa-screen" class="login-screen hidden">
     <div class="login-card" style="max-width:400px">
       <div class="login-logo">Diar<span>IO</span></div>
-      <p class="login-sub" style="margin-bottom:20px">Ingresa el código de invitación de tu local</p>
+      <p class="login-sub" style="margin-bottom:20px">Configura tu local para comenzar</p>
 
+      <p style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:8px;text-align:left;letter-spacing:.4px">CREAR LOCAL NUEVO</p>
+      <input
+        type="text"
+        id="inp-nombre-empresa"
+        class="login-code-input"
+        placeholder="Nombre del local"
+        style="letter-spacing:0;text-transform:none;margin-bottom:6px"
+      />
+      <button class="btn-primary" id="btn-crear-empresa" style="width:100%">Crear local</button>
+
+      <div class="divider" style="margin:20px 0 16px"><hr /><span>o únete a uno existente</span><hr /></div>
+
+      <p style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:8px;text-align:left;letter-spacing:.4px">UNIRTE CON CÓDIGO</p>
       <input
         type="text"
         id="inp-codigo-empresa"
@@ -46,11 +59,9 @@
         placeholder="Ej: CAFET-1234"
         style="margin-bottom:6px"
       />
-      <button class="btn-primary" id="btn-unirse-empresa" style="width:100%">Unirme al local</button>
+      <button class="btn-secondary" id="btn-unirse-empresa" style="width:100%;height:36px">Unirme al local</button>
 
-      <p class="login-note">
-        Solicita el código al administrador de tu local para poder acceder.
-      </p>
+      <p class="login-note">El administrador de tu local debe compartirte el código.</p>
     </div>
   </div>
 
