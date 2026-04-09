@@ -117,7 +117,6 @@ export async function renderDashboard(empresaCodigo, nombreEmpresa) {
   contenedor.querySelector('#ql-registro')?.addEventListener('click',  () => window.__navTo?.('registro'));
   contenedor.querySelector('#ql-historial')?.addEventListener('click', () => window.__navTo?.('registro'));
 }
-}
 
 // ── Helpers ────────────────────────────────────────────────
 
