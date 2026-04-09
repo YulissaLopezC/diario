@@ -211,8 +211,7 @@ async function cargarResumenDia(fechaDisplay) {
         <div class="dash-dia-metric-label">Balance</div>
         <div class="dash-dia-metric-val" style="color:${balColor}">${formatCOP(balance)}</div>
       </div>
-    </div>
-    <div class="dash-dia-cats">${filasCat}</div>`;
+    </div>`;
 }
 
 // ── Helpers comunes ────────────────────────────────────────
