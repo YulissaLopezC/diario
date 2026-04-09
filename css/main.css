@@ -424,27 +424,54 @@ tbody tr:hover td { background: var(--bg); }
 }
 #loader span { color: var(--green); }
 
-/* ── Entry card centrada ── */
+/* ── Entry card — mismo ancho que la tabla ── */
 .entry-card {
-  max-width: 860px;
-  margin-left: auto;
-  margin-right: auto;
+  width: 100%;
 }
 .entry-form {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   align-items: flex-end;
-  justify-content: center;
 }
 .entry-form .field {
-  flex: 1 1 130px;
-  min-width: 100px;
-  max-width: 160px;
+  flex: 1 1 120px;
+  min-width: 90px;
 }
 .entry-form .field:last-child {
   flex: 0 0 auto;
-  max-width: none;
+}
+
+/* ── Paginación tabla ── */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+.pag-arrow {
+  width: 28px; height: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  transition: background var(--transition);
+}
+.pag-arrow:hover:not(:disabled) { background: var(--surface-2); }
+.pag-arrow:disabled { opacity: 0.3; cursor: default; }
+.pag-info {
+  font-size: 12px;
+  color: var(--text-3);
+  min-width: 80px;
+  text-align: center;
 }
 
 /* ── Date input ── */
