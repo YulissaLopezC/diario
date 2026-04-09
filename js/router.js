@@ -279,7 +279,12 @@ function renderSelectorMes() {
   };
 }
 
-async function renderTabla() {
+// ── Estado de paginación ───────────────────────────────────
+const POR_PAGINA  = 15;
+let pagActual     = 1;
+let movsCache     = [];   // todos los movs del mes, para paginar en cliente
+
+async function renderTabla(resetPag = true) {
   const wrap = document.getElementById('tabla-movimientos');
   if (!wrap) return;
 
@@ -291,25 +296,41 @@ async function renderTabla() {
 
   const clave = mesesConDatos[mesSelIdx];
   const [anio, mes] = clave.split('-');
-  const movs = await getMovimientosMes(empresaCodigo, parseInt(mes), parseInt(anio));
+  movsCache = await getMovimientosMes(empresaCodigo, parseInt(mes), parseInt(anio));
 
-  if (!movs.length) {
+  if (!movsCache.length) {
     wrap.innerHTML = emptyState('Sin movimientos en este mes.');
     document.getElementById('tabla-footer').innerHTML = '';
     return;
   }
 
-  let totalVenta = 0, totalGasto = 0, totalCompra = 0;
+  if (resetPag) pagActual = 1;
+  renderPagina();
+}
 
-  const filas = movs.map(m => {
+function renderPagina() {
+  const wrap = document.getElementById('tabla-movimientos');
+  if (!wrap) return;
+
+  const totalPags = Math.ceil(movsCache.length / POR_PAGINA);
+  if (pagActual > totalPags) pagActual = totalPags;
+
+  const inicio = (pagActual - 1) * POR_PAGINA;
+  const pagMovs = movsCache.slice(inicio, inicio + POR_PAGINA);
+
+  // Totales siempre del mes completo (no solo la página)
+  let totalVenta = 0, totalGasto = 0, totalCompra = 0;
+  movsCache.forEach(m => {
     const cat = (m.categoria || '').toLowerCase();
     if (cat === 'venta')  totalVenta  += m.valor;
     if (cat === 'gasto')  totalGasto  += m.valor;
     if (cat === 'compra') totalCompra += m.valor;
+  });
 
+  const filas = pagMovs.map(m => {
+    const cat     = (m.categoria || '').toLowerCase();
     const prov    = m.proveedor ? toSentenceCase(m.proveedor) : '<span style="color:var(--text-3)">—</span>';
     const factura = m.factura   || '<span style="color:var(--text-3)">—</span>';
-
     return `<tr data-id="${m.id}" data-cat="${cat}" data-valor="${m.valor}">
       <td>${m.fecha}</td>
       <td><span class="badge badge-${cat}">${toSentenceCase(m.categoria)}</span></td>
@@ -335,9 +356,20 @@ async function renderTabla() {
       </table>
     </div>`;
 
-  renderFooterTotales(totalVenta, totalGasto, totalCompra);
+  // Paginación — solo si hay más de una página
+  if (totalPags > 1) {
+    wrap.innerHTML += `
+      <div class="pagination">
+        <button class="pag-arrow" id="pag-prev" ${pagActual === 1 ? 'disabled' : ''}>&#8249;</button>
+        <span class="pag-info">Pág. ${pagActual} de ${totalPags}</span>
+        <button class="pag-arrow" id="pag-next" ${pagActual === totalPags ? 'disabled' : ''}>&#8250;</button>
+      </div>`;
 
-  // Exponer función global para el onclick inline
+    document.getElementById('pag-prev').onclick = () => { pagActual--; renderPagina(); };
+    document.getElementById('pag-next').onclick = () => { pagActual++; renderPagina(); };
+  }
+
+  renderFooterTotales(totalVenta, totalGasto, totalCompra);
   window.__delMov = (id) => confirmarEliminar(id);
 }
 
@@ -351,14 +383,13 @@ function renderFooterTotales(v, g, c) {
 }
 
 function actualizarFooter() {
-  const rows = document.querySelectorAll('#tabla-movimientos tbody tr');
+  // Lee siempre del cache completo del mes, no solo la página visible
   let v = 0, g = 0, c = 0;
-  rows.forEach(r => {
-    const cat   = r.dataset.cat;
-    const valor = parseFloat(r.dataset.valor) || 0;
-    if (cat === 'venta')  v += valor;
-    if (cat === 'gasto')  g += valor;
-    if (cat === 'compra') c += valor;
+  movsCache.forEach(m => {
+    const cat = (m.categoria || '').toLowerCase();
+    if (cat === 'venta')  v += m.valor;
+    if (cat === 'gasto')  g += m.valor;
+    if (cat === 'compra') c += m.valor;
   });
   renderFooterTotales(v, g, c);
 }
@@ -372,10 +403,12 @@ function confirmarEliminar(movId) {
     onConfirm: async () => {
       try {
         await eliminarMovimiento(empresaCodigo, movId);
-        // Quitar fila del DOM sin recargar todo
-        const tr = document.querySelector(`tr[data-id="${movId}"]`);
-        if (tr) tr.remove();
-        actualizarFooter();
+        // Quitar del cache y redibujar página actual
+        movsCache = movsCache.filter(m => m.id !== movId);
+        // Si la página actual quedó vacía, retroceder una
+        const totalPags = Math.ceil(movsCache.length / POR_PAGINA);
+        if (pagActual > totalPags && pagActual > 1) pagActual--;
+        renderPagina();
         toast('Movimiento eliminado.');
       } catch (err) {
         console.error(err);
@@ -387,23 +420,9 @@ function confirmarEliminar(movId) {
 
 // Agregar fila al inicio de la tabla sin recargar todo
 function prependarFilaTabla(m) {
-  const tbody = document.querySelector('#tabla-movimientos tbody');
-  if (!tbody) return;
-  const cat = (m.categoria || '').toLowerCase();
-  const tr  = document.createElement('tr');
-  tr.dataset.id    = m.id;
-  tr.dataset.cat   = cat;
-  tr.dataset.valor = m.valor;
-  tr.innerHTML = `
-    <td>${m.fecha}</td>
-    <td><span class="badge badge-${cat}">${toSentenceCase(m.categoria)}</span></td>
-    <td>${m.proveedor ? toSentenceCase(m.proveedor) : '<span style="color:var(--text-3)">—</span>'}</td>
-    <td style="font-family:var(--font-mono);font-size:12px">${m.factura || '<span style="color:var(--text-3)">—</span>'}</td>
-    <td class="amount ${cat}">${formatCOP(m.valor)}</td>
-    <td style="width:32px;text-align:center">
-      <button class="btn-del" title="Eliminar" onclick="window.__delMov('${m.id}')">&#x2715;</button>
-    </td>`;
-  tbody.insertBefore(tr, tbody.firstChild);
+  movsCache.unshift(m); // insertar al inicio (más reciente primero)
+  pagActual = 1;        // volver a página 1 para ver el nuevo registro
+  renderPagina();
 }
 
 // ── Flujo de empresa (primer login) ───────────────────────
