@@ -377,11 +377,22 @@ function renderPagina() {
 }
 
 function renderFooterTotales(v, g, c) {
+  const balance = v - g - c;
+  const balColor = balance >= 0 ? 'var(--green)' : 'var(--red)';
   document.getElementById('tabla-footer').innerHTML = `
-    <div class="table-footer">
-      <span style="color:var(--green)">Ventas: ${formatCOP(v)}</span>
-      <span style="color:var(--red)">Gastos: ${formatCOP(g)}</span>
-      <span style="color:var(--blue)">Compras: ${formatCOP(c)}</span>
+    <div class="reg-footer">
+      <div class="reg-footer-item">
+        <div class="reg-footer-label">Total ventas</div>
+        <div class="reg-footer-val" style="color:var(--green)">${formatCOP(v)}</div>
+      </div>
+      <div class="reg-footer-item">
+        <div class="reg-footer-label">Total gastos</div>
+        <div class="reg-footer-val" style="color:var(--red)">${formatCOP(g)}</div>
+      </div>
+      <div class="reg-footer-item">
+        <div class="reg-footer-label">Balance neto</div>
+        <div class="reg-footer-val" style="color:${balColor}">${formatCOP(balance)}</div>
+      </div>
     </div>`;
 }
 

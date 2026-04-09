@@ -1,15 +1,26 @@
 <!-- pages/registro.html -->
 
-<!-- Formulario de entrada rápida — centrado -->
-<div class="card entry-card">
-  <div class="card-title">Nuevo movimiento</div>
-  <div class="entry-form">
+<div class="reg-page-head">
+  <div>
+    <h1 class="reg-page-title">Registro de movimientos</h1>
+    <p class="reg-page-sub">Gestiona el flujo de caja de tu local con precisión.</p>
+  </div>
+</div>
 
+<!-- Formulario de entrada -->
+<div class="card reg-entry-card">
+  <div class="reg-entry-title">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1D9E75" stroke-width="2.5">
+      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+    </svg>
+    Nuevo movimiento
+  </div>
+
+  <div class="entry-form">
     <div class="field">
       <label for="inp-fecha">Fecha</label>
       <input type="date" id="inp-fecha" />
     </div>
-
     <div class="field">
       <label for="inp-categoria">Categoría</label>
       <select id="inp-categoria">
@@ -18,54 +29,46 @@
         <option value="Compra">Compra</option>
       </select>
     </div>
-
     <div class="field">
       <label for="inp-valor">Valor</label>
-      <input
-        type="text"
-        id="inp-valor"
-        placeholder="0"
-        inputmode="numeric"
-        autocomplete="off"
-      />
+      <input type="text" id="inp-valor" placeholder="$ 0" inputmode="numeric" autocomplete="off" />
     </div>
-
     <div class="field">
-      <label for="inp-proveedor">Proveedor <span style="color:var(--text-3)">(opcional)</span></label>
-      <input type="text" id="inp-proveedor" placeholder="Nombre" />
+      <label for="inp-proveedor">Proveedor <span style="color:var(--text-3);font-weight:400">(opcional)</span></label>
+      <input type="text" id="inp-proveedor" placeholder="Nombre comercial" />
     </div>
-
     <div class="field">
-      <label for="inp-factura">N° Factura <span style="color:var(--text-3)">(opcional)</span></label>
-      <input type="text" id="inp-factura" placeholder="FC-0001" />
+      <label for="inp-factura">N° Factura <span style="color:var(--text-3);font-weight:400">(opcional)</span></label>
+      <input type="text" id="inp-factura" placeholder="FAC-0001" />
     </div>
-
     <div class="field">
       <label>&nbsp;</label>
-      <button class="btn-add" id="btn-agregar">+ Agregar</button>
+      <button class="btn-registrar" id="btn-agregar">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        Registrar
+      </button>
     </div>
-
   </div>
+
   <p class="entry-hint">
-    Presiona <strong>Enter</strong> en el último campo o haz clic en <strong>+ Agregar</strong>.
-    El registro se guardará en el mes de la fecha ingresada.
+    Presiona <strong>Enter</strong> o clic en <strong>Registrar</strong>.
+    El movimiento se guarda en el mes de la fecha ingresada.
   </p>
 </div>
 
-<!-- Tabla de movimientos por mes -->
+<!-- Tabla de movimientos -->
 <div class="card">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-    <div class="card-title" style="margin:0">Movimientos</div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+    <div class="reg-mov-title">Movimientos recientes</div>
     <div class="month-nav">
-      <button class="month-arrow" id="btn-mes-prev" title="Mes anterior">&#8249;</button>
+      <button class="month-arrow" id="btn-mes-prev">&#8249;</button>
       <select class="month-select" id="sel-mes"></select>
-      <button class="month-arrow" id="btn-mes-next" title="Mes siguiente">&#8250;</button>
+      <button class="month-arrow" id="btn-mes-next">&#8250;</button>
     </div>
   </div>
 
   <div id="tabla-movimientos"></div>
   <div id="tabla-footer"></div>
 </div>
-
-
-

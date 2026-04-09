@@ -83,19 +83,39 @@ function renderVistaPreviaVacia() {
 }
 
 function renderVistaPrevia(movs) {
+  // Actualizar badge período
+  const desde = document.getElementById('inf-mes-desde')?.value;
+  const hasta  = document.getElementById('inf-mes-hasta')?.value;
+  if (desde && hasta) {
+    const [da, dm] = desde.split('-');
+    const [ha, hm] = hasta.split('-');
+    const badge = document.getElementById('inf-periodo-badge');
+    if (badge) {
+      badge.textContent = desde === hasta
+        ? labelMes(parseInt(dm), parseInt(da))
+        : `${labelMes(parseInt(dm),parseInt(da)).slice(0,3)} ${da} — ${labelMes(parseInt(hm),parseInt(ha)).slice(0,3)} ${ha}`;
+    }
+  }
+
   const el = document.getElementById('inf-tabla-wrap');
   if (!el) return;
 
   if (!movs.length) {
     el.innerHTML = `<p style="font-size:12px;color:var(--text-3);padding:16px 0">No hay movimientos para los filtros seleccionados.</p>`;
+    ['inf-total-ventas','inf-total-gastos','inf-balance'].forEach(id => {
+      const e = document.getElementById(id); if (e) e.textContent = '—';
+    });
     return;
   }
 
-  let totalDebito = 0, totalCredito = 0;
+  let totalVentas = 0, totalGastos = 0, totalCompras = 0, totalDebito = 0, totalCredito = 0;
 
   const filas = movs.map(m => {
     const esCreditoCat = m.categoria === 'VENTA';
     const valor = m.valor || 0;
+    if (m.categoria === 'VENTA')  totalVentas  += valor;
+    if (m.categoria === 'GASTO')  totalGastos  += valor;
+    if (m.categoria === 'COMPRA') totalCompras += valor;
     if (esCreditoCat) totalCredito += valor;
     else              totalDebito  += valor;
 
@@ -105,28 +125,36 @@ function renderVistaPrevia(movs) {
     return `<tr>
       <td>${m.fecha}</td>
       <td><span class="badge badge-${m.categoria.toLowerCase()}">${toSentenceCase(m.categoria)}</span></td>
-      <td>${toSentenceCase(m.subcategoria)}</td>
-      <td>${m.proveedor ? toSentenceCase(m.proveedor) : '—'}</td>
-      <td style="font-family:var(--font-mono);font-size:12px">${m.factura || '—'}</td>
+      <td>${m.proveedor ? toSentenceCase(m.proveedor) : '<span style="color:var(--text-3)">—</span>'}</td>
+      <td style="font-family:var(--font-mono);font-size:12px">${m.factura || '<span style="color:var(--text-3)">—</span>'}</td>
       <td style="text-align:right">${debito}</td>
       <td style="text-align:right">${credito}</td>
     </tr>`;
   }).join('');
+
+  // Actualizar métricas resumen
+  const balance = totalVentas - totalGastos - totalCompras;
+  const elV = document.getElementById('inf-total-ventas');
+  const elG = document.getElementById('inf-total-gastos');
+  const elB = document.getElementById('inf-balance');
+  if (elV) elV.textContent = formatCOP(totalVentas);
+  if (elG) elG.textContent = formatCOP(totalGastos);
+  if (elB) { elB.textContent = formatCOP(balance); elB.style.color = balance >= 0 ? 'var(--green)' : 'var(--red)'; }
 
   el.innerHTML = `
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
-            <th>Fecha</th><th>Categoría</th><th>Subcategoría</th>
-            <th>Proveedor</th><th>N° Factura</th>
+            <th>Fecha</th><th>Categoría</th><th>Proveedor</th>
+            <th>N° Factura</th>
             <th style="text-align:right">Débito</th>
             <th style="text-align:right">Crédito</th>
           </tr>
         </thead>
         <tbody>${filas}</tbody>
       </table>
-      <div class="table-footer">
+      <div class="table-footer" style="margin-top:10px">
         <span style="color:var(--red)">Débito: ${formatCOP(totalDebito)}</span>
         <span style="color:var(--green)">Crédito: ${formatCOP(totalCredito)}</span>
       </div>

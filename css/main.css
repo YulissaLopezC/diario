@@ -675,7 +675,117 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   .dash-title   { font-size: 20px; }
 }
 
-/* ── Footer ── */
+/* ── Registro rediseño ── */
+.reg-page-head  { margin-bottom: 24px; }
+.reg-page-title { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; color: var(--text); margin-bottom: 4px; }
+.reg-page-sub   { font-size: 13px; color: var(--text-3); }
+.reg-entry-card { margin-bottom: 16px; }
+.reg-entry-title {
+  font-size: 13px; font-weight: 600; color: var(--text);
+  display: flex; align-items: center; gap: 8px; margin-bottom: 16px;
+}
+.reg-mov-title { font-size: 15px; font-weight: 600; color: var(--text); }
+
+.btn-registrar {
+  height: 34px; padding: 0 16px;
+  background: var(--green); color: #fff; border: none;
+  border-radius: var(--radius-md); font-size: 13px; font-weight: 600;
+  cursor: pointer; display: flex; align-items: center; gap: 6px;
+  white-space: nowrap; transition: background var(--transition);
+}
+.btn-registrar:hover { background: var(--green-dark); }
+
+/* Footer tabla con balance neto */
+.reg-footer {
+  display: flex; justify-content: flex-end; gap: 24px;
+  padding-top: 14px; border-top: 1px solid var(--border); margin-top: 4px;
+}
+.reg-footer-item { text-align: right; }
+.reg-footer-label {
+  font-size: 10px; font-weight: 600; letter-spacing: .4px;
+  text-transform: uppercase; color: var(--text-3); margin-bottom: 3px;
+}
+.reg-footer-val { font-size: 16px; font-weight: 700; font-family: var(--font-mono); }
+
+/* ── Informes rediseño ── */
+.inf-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.inf-sidebar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  position: sticky;
+  top: calc(var(--topbar-h) + 16px);
+}
+.inf-sidebar-title { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 16px; }
+.inf-main { display: flex; flex-direction: column; gap: 14px; }
+
+.btn-inf-excel {
+  width: 100%; height: 38px; background: var(--green); color: #fff;
+  border: none; border-radius: var(--radius-md); font-size: 13px; font-weight: 600;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  gap: 7px; transition: background var(--transition);
+}
+.btn-inf-excel:hover { background: var(--green-dark); }
+.btn-inf-csv {
+  width: 100%; height: 38px; background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  font-size: 13px; font-weight: 500; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  gap: 7px; transition: background var(--transition);
+}
+.btn-inf-csv:hover { background: var(--surface-2); }
+.btn-inf-preview {
+  width: 100%; height: 34px; background: none; color: var(--text-2);
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  font-size: 12px; cursor: pointer; transition: background var(--transition);
+}
+.btn-inf-preview:hover { background: var(--surface-2); }
+
+.inf-tip {
+  background: var(--green-light); border: 1px solid #9FE1CB;
+  border-radius: var(--radius-md); padding: 12px; margin-top: 16px;
+}
+.inf-tip-label {
+  font-size: 10px; font-weight: 600; letter-spacing: .4px;
+  text-transform: uppercase; color: var(--green-dark); margin-bottom: 4px;
+}
+.inf-tip p { font-size: 11px; color: var(--green-dark); line-height: 1.6; }
+
+.inf-preview-card { margin: 0; }
+.inf-preview-head {
+  display: flex; justify-content: space-between;
+  align-items: center; margin-bottom: 14px;
+}
+.inf-preview-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.inf-preview-badge {
+  font-size: 11px; font-weight: 500; padding: 3px 10px;
+  background: var(--surface-2); border-radius: 999px; color: var(--text-2);
+}
+.inf-metrics-row {
+  display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px;
+}
+.inf-metric {
+  background: var(--surface-2); border-radius: var(--radius-md); padding: 12px;
+}
+.inf-metric-label {
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .4px; color: var(--text-3); margin-bottom: 4px;
+}
+.inf-metric-val { font-size: 18px; font-weight: 700; font-family: var(--font-mono); }
+.inf-tabla-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 14px; }
+
+@media (max-width: 800px) {
+  .inf-layout { grid-template-columns: 1fr; }
+  .inf-sidebar { position: static; }
+}
+
+/* ── Footer app ── */
 .app-footer {
   text-align: center;
   padding: 20px;
