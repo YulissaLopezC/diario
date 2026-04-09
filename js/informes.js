@@ -32,14 +32,19 @@ function llenarSelectoresMes(meses) {
 }
 
 // ── Bind de eventos ────────────────────────────────────────
+// Usamos cloneNode para limpiar listeners previos antes de reasignar
 function bindEventos(empresaCodigo, meses) {
-  const btnPrevia  = document.getElementById('inf-btn-previa');
-  const btnCSV     = document.getElementById('inf-btn-csv');
-  const btnExcel   = document.getElementById('inf-btn-excel');
+  ['inf-btn-previa', 'inf-btn-csv', 'inf-btn-excel'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    // Reemplazar el nodo elimina todos los listeners acumulados
+    const nuevo = btn.cloneNode(true);
+    btn.parentNode.replaceChild(nuevo, btn);
+  });
 
-  btnPrevia?.addEventListener('click',  () => cargarPrevia(empresaCodigo));
-  btnCSV?.addEventListener('click',     () => exportarCSV(empresaCodigo));
-  btnExcel?.addEventListener('click',   () => exportarExcel(empresaCodigo));
+  document.getElementById('inf-btn-previa')?.addEventListener('click', () => cargarPrevia(empresaCodigo));
+  document.getElementById('inf-btn-csv')?.addEventListener('click',    () => exportarCSV(empresaCodigo));
+  document.getElementById('inf-btn-excel')?.addEventListener('click',  () => exportarExcel(empresaCodigo));
 }
 
 // ── Obtener filtros actuales ───────────────────────────────
@@ -204,7 +209,7 @@ async function exportarExcel(empresaCodigo) {
     .map(row => row.join(';'))  // punto y coma para Excel español
     .join('\n');
 
-  descargar(csv, 'text/csv;charset=utf-8', nombreArchivo('xlsx_compatible.csv'));
+  descargar(csv, 'text/csv;charset=utf-8', nombreArchivo('xlsx'));
 }
 
 // ── Helpers ────────────────────────────────────────────────
