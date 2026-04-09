@@ -72,6 +72,9 @@ export async function eliminarMovimiento(empresaCodigo, movId) {
   const ref = doc(db, 'empresas', empresaCodigo, 'movimientos', movId);
   await deleteDoc(ref);
 }
+
+// ── Leer todos los movimientos (para dashboard anual) ──────
+export async function getTodosMovimientos(empresaCodigo) {
   const snap = await getDocs(refMovimientos(empresaCodigo));
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
