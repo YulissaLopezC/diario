@@ -19,7 +19,8 @@
       </select>
     </div>
 
-    <div class="field">
+    <!-- Subcategoría oculta temporalmente -->
+    <div class="field" id="field-subcategoria" style="display:none">
       <label for="inp-subcategoria">Subcategoría</label>
       <select id="inp-subcategoria">
         <!-- Llenado dinámicamente por router.js -->
@@ -28,7 +29,13 @@
 
     <div class="field">
       <label for="inp-valor">Valor</label>
-      <input type="number" id="inp-valor" placeholder="0" min="0" step="any" />
+      <input
+        type="text"
+        id="inp-valor"
+        placeholder="0"
+        inputmode="numeric"
+        autocomplete="off"
+      />
     </div>
 
     <div class="field">

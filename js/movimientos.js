@@ -3,7 +3,7 @@
 
 import {
   collection, addDoc, query, where,
-  orderBy, getDocs, Timestamp
+  getDocs, Timestamp
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { db } from './firebase.js';
 import { toUpperStorage, claveMes, parseFecha } from './ui.js';
@@ -43,12 +43,16 @@ export async function getMovimientosMes(empresaCodigo, mes, anio) {
   const clave = claveMes(mes, anio);
   const q = query(
     refMovimientos(empresaCodigo),
-    where('claveMes', '==', clave),
-    orderBy('fecha', 'desc'),
-    orderBy('creadoEn', 'desc')
+    where('claveMes', '==', clave)
+    // Sin orderBy compuesto → sin necesidad de índice
   );
   const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const movs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  // Ordenar en el cliente: más reciente primero
+  return movs.sort((a, b) => {
+    if (b.fecha !== a.fecha) return b.fecha.localeCompare(a.fecha);
+    return (b.creadoEn?.seconds || 0) - (a.creadoEn?.seconds || 0);
+  });
 }
 
 // ── Obtener lista de meses con datos ──────────────────────
@@ -74,10 +78,14 @@ export async function getMovimientosRango(empresaCodigo, claveDesde, claveHasta)
   const q = query(
     refMovimientos(empresaCodigo),
     where('claveMes', '>=', claveDesde),
-    where('claveMes', '<=', claveHasta),
-    orderBy('claveMes', 'asc'),
-    orderBy('fecha',    'asc')
+    where('claveMes', '<=', claveHasta)
+    // Sin orderBy compuesto → sin índice requerido
   );
   const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const movs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  // Ordenar en cliente: por mes y fecha ascendente
+  return movs.sort((a, b) => {
+    if (a.claveMes !== b.claveMes) return a.claveMes.localeCompare(b.claveMes);
+    return a.fecha.localeCompare(b.fecha);
+  });
 }

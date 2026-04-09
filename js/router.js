@@ -163,9 +163,21 @@ async function initRegistro() {
   selCat.addEventListener('change', () => actualizarSubcats(selCat.value, selSub));
   actualizarSubcats(selCat.value, selSub);
 
-  // Evento "agregar" - botón y Enter en último campo
+  // Formato de número con puntos mientras escribe (ej: 20.000)
+  const inpValor = document.getElementById('inp-valor');
+  inpValor.addEventListener('input', () => {
+    const raw = inpValor.value.replace(/\./g, '').replace(/[^0-9]/g, '');
+    if (raw === '') { inpValor.value = ''; return; }
+    inpValor.value = parseInt(raw, 10).toLocaleString('es-CO');
+  });
+
+  // Evento "agregar" — botón y Enter en último campo
   document.getElementById('btn-agregar').addEventListener('click', agregarMovimientoUI);
   document.getElementById('inp-factura').addEventListener('keydown', e => {
+    if (e.key === 'Enter') agregarMovimientoUI();
+  });
+  // También Enter desde el campo valor (cuando factura está oculto)
+  inpValor.addEventListener('keydown', e => {
     if (e.key === 'Enter') agregarMovimientoUI();
   });
 
@@ -184,7 +196,8 @@ async function agregarMovimientoUI() {
   const fecha    = document.getElementById('inp-fecha').value.trim();
   const cat      = document.getElementById('inp-categoria').value;
   let   sub      = document.getElementById('inp-subcategoria').value;
-  const valor    = document.getElementById('inp-valor').value.trim();
+  // Limpiar puntos de miles antes de parsear
+  const valorRaw = document.getElementById('inp-valor').value.replace(/\./g, '').trim();
   const prov     = document.getElementById('inp-proveedor').value.trim();
   const factura  = document.getElementById('inp-factura').value.trim();
 
@@ -213,14 +226,13 @@ async function agregarMovimientoUI() {
   // Validaciones
   if (!fecha) { toast('Ingresa la fecha.', 'error'); return; }
   if (!parseFecha(fecha)) { toast('Formato de fecha: DD/MM/YYYY', 'error'); return; }
-  if (!sub)   { toast('Selecciona una subcategoría.', 'error'); return; }
-  if (!valor || isNaN(parseFloat(valor.replace(/[^0-9.]/g,'')))) {
+  if (!valorRaw || isNaN(parseFloat(valorRaw))) {
     toast('Ingresa un valor válido.', 'error'); return;
   }
 
   try {
     const mov = await agregarMovimiento(empresaCodigo, userActual.uid, {
-      fecha, categoria: cat, subcategoria: sub, valor, proveedor: prov, factura
+      fecha, categoria: cat, subcategoria: sub, valor: valorRaw, proveedor: prov, factura
     });
 
     toast('Movimiento guardado.');
