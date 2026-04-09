@@ -209,7 +209,7 @@ async function exportarExcel(empresaCodigo) {
     .map(row => row.join(';'))  // punto y coma para Excel español
     .join('\n');
 
-  descargar(csv, 'text/csv;charset=utf-8', nombreArchivo('xlsx'));
+  descargar(csv, 'text/csv;charset=utf-8', nombreArchivo('excel.csv'));
 }
 
 // ── Helpers ────────────────────────────────────────────────
