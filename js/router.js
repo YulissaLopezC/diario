@@ -248,23 +248,34 @@ async function actualizarBannerDia() {
 
 // ── Pantalla de Registro ───────────────────────────────────
 async function initRegistro() {
-  const inpFecha = document.getElementById('inp-fecha');
-  inpFecha.value = hoyISO();
+  const inpFecha   = document.getElementById('inp-fecha');
+  inpFecha.value   = hoyISO();
 
-  const inpValor = document.getElementById('inp-valor');
+  // Limpiar listeners acumulados reemplazando los nodos
+  const inpValor   = reemplazar('inp-valor');
+  const inpFactura = reemplazar('inp-factura');
+  const btnAgregar = reemplazar('btn-agregar');
+
+  // Formato de número con puntos
   inpValor.addEventListener('input', () => {
     const raw = inpValor.value.replace(/\./g, '').replace(/[^0-9]/g, '');
     inpValor.value = raw ? parseInt(raw, 10).toLocaleString('es-CO') : '';
   });
 
-  inpValor.addEventListener('keydown', e => { if (e.key === 'Enter') agregarMovimientoUI(); });
-  document.getElementById('inp-factura').addEventListener('keydown', e => {
-    if (e.key === 'Enter') agregarMovimientoUI();
-  });
-  document.getElementById('btn-agregar').addEventListener('click', agregarMovimientoUI);
+  inpValor.addEventListener('keydown',   e => { if (e.key === 'Enter') agregarMovimientoUI(); });
+  inpFactura.addEventListener('keydown', e => { if (e.key === 'Enter') agregarMovimientoUI(); });
+  btnAgregar.addEventListener('click', agregarMovimientoUI);
 
   await recargarMeses();
   await actualizarBannerDia();
+}
+
+// Reemplaza un nodo por su clon limpio (sin listeners) y lo devuelve
+function reemplazar(id) {
+  const el    = document.getElementById(id);
+  const clone = el.cloneNode(true);
+  el.parentNode.replaceChild(clone, el);
+  return clone;
 }
 
 async function agregarMovimientoUI() {
