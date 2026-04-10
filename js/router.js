@@ -1,6 +1,5 @@
 // js/router.js
 // Orquesta el flujo: login → empresa → app
-// Es el punto de entrada principal que conecta todos los módulos
 
 import { initAuth, loginConGoogle, logout, getInitials } from './auth.js';
 import { cargarEmpresasDelUsuario, crearEmpresa, unirseAEmpresa, empresaActual, misEmpresas, setEmpresaActual, exposeAdminTools } from './empresa.js';
@@ -30,24 +29,18 @@ export function init() {
 async function onLogin(user) {
   userActual = user;
   showLoader();
-
   try {
     const empresas = await cargarEmpresasDelUsuario(user.uid);
-
     if (!empresas.length) {
       hideLoader();
       mostrarFlujoEmpresa(user);
       return;
     }
-
-    // Si tiene varias empresas mostrar selector, si tiene una entrar directo
     if (empresas.length > 1) {
       hideLoader();
       mostrarSelectorEmpresa(empresas, user);
       return;
     }
-
-    // Una sola empresa — entrar directo
     empresaCodigo = empresas[0].codigo;
     setEmpresaActual(empresaCodigo);
     await cargarSubcategorias(empresaCodigo);
@@ -61,62 +54,59 @@ async function onLogin(user) {
 
 // ── Flujo al hacer logout ──────────────────────────────────
 function onLogout() {
-  userActual     = null;
-  empresaCodigo  = null;
-  mesesConDatos  = [];
+  userActual    = null;
+  empresaCodigo = null;
+  mesesConDatos = [];
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('topbar').classList.add('hidden');
   document.getElementById('app').classList.add('hidden');
   hideLoader();
 }
 
-// ── Iniciar la app después de tener usuario + empresa ──────
+// ── Iniciar la app ─────────────────────────────────────────
 async function iniciarApp() {
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('topbar').classList.remove('hidden');
   document.getElementById('app').classList.remove('hidden');
-
+  exposeAdminTools(userActual.uid, userActual.email, userActual.displayName || '');
   renderTopbar();
   bindNav();
-
   await goToDashboard();
   hideLoader();
 }
 
 // ── Topbar ─────────────────────────────────────────────────
-// ── Topbar ─────────────────────────────────────────────────
-// El listener del chip se registra UNA sola vez en bindNav()
 function renderTopbar() {
   const chip = document.getElementById('user-chip');
   if (!chip) return;
-
   const foto = userActual.photoURL;
-  const avatarHtml = foto
+  chip.querySelector('.user-avatar').innerHTML = foto
     ? `<img src="${foto}" alt="foto" />`
     : getInitials(userActual.displayName || userActual.email);
-
-  chip.querySelector('.user-avatar').innerHTML = avatarHtml;
   chip.querySelector('.user-name').textContent =
     (userActual.displayName || userActual.email).split(' ')[0];
 }
 
-function toggleUserMenu() {
-  let menu = document.getElementById('user-menu');
-  if (menu) { menu.remove(); return; }
+// ── Menú usuario ───────────────────────────────────────────
+function abrirUserMenu(e) {
+  e.stopPropagation();
 
-  const empresa = empresaActual;
+  // Si ya está abierto, cerrarlo
+  const existente = document.getElementById('user-menu');
+  if (existente) { existente.remove(); return; }
+
+  const empresa     = empresaActual;
   const tieneVarias = misEmpresas.length > 1;
 
-  // Generar opciones de cambio de empresa si tiene varias
   const otrasEmpresas = misEmpresas
-    .filter(e => e.codigo !== empresa?.codigo)
-    .map(e => `
-      <button class="user-menu-btn" data-codigo="${e.codigo}">
-        Cambiar a <strong>${toSentenceCase(e.nombre)}</strong>
+    .filter(em => em.codigo !== empresa?.codigo)
+    .map(em => `
+      <button class="user-menu-btn" data-codigo="${em.codigo}">
+        Cambiar a <strong>${toSentenceCase(em.nombre)}</strong>
       </button>`).join('');
 
-  menu = document.createElement('div');
-  menu.id = 'user-menu';
+  const menu = document.createElement('div');
+  menu.id        = 'user-menu';
   menu.className = 'user-menu';
   menu.innerHTML = `
     <div class="user-menu-header">
@@ -132,17 +122,22 @@ function toggleUserMenu() {
     <button class="user-menu-btn" id="btn-unirse-nueva">+ Unirme a otro local</button>
     <button class="user-menu-btn danger" id="btn-logout">Cerrar sesión</button>
   `;
+
+  // Evitar que clics dentro del menú lo cierren
+  menu.addEventListener('click', ev => ev.stopPropagation());
+
   document.body.appendChild(menu);
 
-  document.getElementById('btn-logout').addEventListener('click', logout);
+  menu.querySelector('#btn-logout').addEventListener('click', () => {
+    menu.remove();
+    logout();
+  });
 
-  // Botón unirse a otra empresa
-  document.getElementById('btn-unirse-nueva')?.addEventListener('click', () => {
+  menu.querySelector('#btn-unirse-nueva').addEventListener('click', () => {
     menu.remove();
     mostrarModalUnirse();
   });
 
-  // Botones de cambio de empresa
   menu.querySelectorAll('[data-codigo]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const codigo = btn.dataset.codigo;
@@ -158,28 +153,29 @@ function toggleUserMenu() {
     });
   });
 
-  setTimeout(() => document.addEventListener('click', cerrarMenuUsuario), 10);
+  // Cerrar al clic fuera — registrar en el siguiente tick para no capturar el clic actual
+  requestAnimationFrame(() => {
+    document.addEventListener('click', function cerrar() {
+      menu.remove();
+      document.removeEventListener('click', cerrar);
+    });
+  });
 }
 
-// ── Modal para unirse a otra empresa desde el menú ─────────
 function mostrarModalUnirse() {
   showModal({
     title: 'Unirme a otro local',
-    description: 'Ingresa el código del local al que quieres unirte:',
+    description: 'Ingresa el código del local:',
     placeholder: 'Ej: CAFET-1234',
     confirmText: 'Unirme',
     onConfirm: async (codigo) => {
       showLoader();
       try {
-        const empresa = await unirseAEmpresa(
-          codigo,
-          userActual.uid,
-          userActual.email,
-          userActual.displayName || ''
-        );
+        const empresa = await unirseAEmpresa(codigo, userActual.uid, userActual.email, userActual.displayName || '');
         if (!empresa) { hideLoader(); return; }
         await cargarSubcategorias(empresa.codigo);
         empresaCodigo = empresa.codigo;
+        renderTopbar();
         await goToDashboard();
         hideLoader();
         toast(`Bienvenido a ${toSentenceCase(empresa.nombre)}.`);
@@ -192,14 +188,6 @@ function mostrarModalUnirse() {
   });
 }
 
-function cerrarMenuUsuario(e) {
-  const menu = document.getElementById('user-menu');
-  if (menu && !menu.contains(e.target)) {
-    menu.remove();
-    document.removeEventListener('click', cerrarMenuUsuario);
-  }
-}
-
 // ── Navegación ─────────────────────────────────────────────
 function bindNav() {
   document.getElementById('logo-btn').addEventListener('click', goToDashboard);
@@ -207,14 +195,13 @@ function bindNav() {
   document.getElementById('nav-registro').addEventListener('click', goToRegistro);
   document.getElementById('nav-informes').addEventListener('click', goToInformes);
 
-  // Listener del chip: una sola vez, usando delegación por ID
+  // Chip: registrar una sola vez con data-bound
   const chip = document.getElementById('user-chip');
   if (chip && !chip.dataset.bound) {
-    chip.addEventListener('click', toggleUserMenu);
+    chip.addEventListener('click', abrirUserMenu);
     chip.dataset.bound = 'true';
   }
 
-  // Exponer navegación global para que dashboard.js pueda usarla
   window.__navTo = (page) => {
     if (page === 'dashboard') goToDashboard();
     if (page === 'registro')  goToRegistro();
@@ -226,25 +213,21 @@ async function goToDashboard() {
   showPage('dashboard');
   await renderDashboard(empresaCodigo, empresaActual?.nombre || '');
 }
-
 async function goToRegistro() {
   showPage('registro');
   await initRegistro();
 }
-
 async function goToInformes() {
   showPage('informes');
   await initInformes(empresaCodigo);
 }
 
-// ── Banner resumen del día en registro ─────────────────────
+// ── Banner resumen del día ─────────────────────────────────
 async function actualizarBannerDia() {
   const banner = document.getElementById('reg-dia-banner');
   if (!banner) return;
-
   const movs = await getMovimientosDia(empresaCodigo, hoy());
   if (!movs.length) { banner.style.display = 'none'; return; }
-
   let v = 0, g = 0, c = 0;
   movs.forEach(m => {
     const cat = (m.categoria || '').toLowerCase();
@@ -252,34 +235,29 @@ async function actualizarBannerDia() {
     if (cat === 'gasto')  g += m.valor;
     if (cat === 'compra') c += m.valor;
   });
-
-  const balance = v - g - c;
+  const balance  = v - g - c;
   const balColor = balance >= 0 ? 'var(--green)' : 'var(--red)';
-
   document.getElementById('rd-ventas').textContent  = formatCOP(v);
   document.getElementById('rd-gastos').textContent  = formatCOP(g);
   document.getElementById('rd-compras').textContent = formatCOP(c);
   const elB = document.getElementById('rd-balance');
-  elB.textContent   = formatCOP(balance);
-  elB.style.color   = balColor;
+  elB.textContent = formatCOP(balance);
+  elB.style.color = balColor;
   banner.style.display = 'flex';
 }
 
 // ── Pantalla de Registro ───────────────────────────────────
 async function initRegistro() {
-  // Fecha de hoy en formato YYYY-MM-DD (requerido por input type=date)
   const inpFecha = document.getElementById('inp-fecha');
   inpFecha.value = hoyISO();
 
-  // Formato de número con puntos mientras escribe
   const inpValor = document.getElementById('inp-valor');
   inpValor.addEventListener('input', () => {
     const raw = inpValor.value.replace(/\./g, '').replace(/[^0-9]/g, '');
     inpValor.value = raw ? parseInt(raw, 10).toLocaleString('es-CO') : '';
   });
 
-  // Enter en valor o factura → agregar
-  inpValor.addEventListener('keydown',  e => { if (e.key === 'Enter') agregarMovimientoUI(); });
+  inpValor.addEventListener('keydown', e => { if (e.key === 'Enter') agregarMovimientoUI(); });
   document.getElementById('inp-factura').addEventListener('keydown', e => {
     if (e.key === 'Enter') agregarMovimientoUI();
   });
@@ -289,9 +267,8 @@ async function initRegistro() {
   await actualizarBannerDia();
 }
 
-
 async function agregarMovimientoUI() {
-  const fechaISO = document.getElementById('inp-fecha').value;           // "YYYY-MM-DD"
+  const fechaISO = document.getElementById('inp-fecha').value;
   const cat      = document.getElementById('inp-categoria').value;
   const valorRaw = document.getElementById('inp-valor').value.replace(/\./g, '').trim();
   const prov     = document.getElementById('inp-proveedor').value.trim();
@@ -302,34 +279,24 @@ async function agregarMovimientoUI() {
     toast('Ingresa un valor válido.', 'error'); return;
   }
 
-  // Convertir YYYY-MM-DD → DD/MM/YYYY para mostrar y guardar
   const [anio, mes, dia] = fechaISO.split('-');
   const fechaDisplay = `${dia}/${mes}/${anio}`;
 
   try {
     const mov = await agregarMovimiento(empresaCodigo, userActual.uid, {
-      fecha: fechaDisplay,
-      categoria: cat,
-      subcategoria: '',
-      valor: valorRaw,
-      proveedor: prov,
-      factura
+      fecha: fechaDisplay, categoria: cat, subcategoria: '',
+      valor: valorRaw, proveedor: prov, factura
     });
-
     toast('Movimiento guardado.');
     limpiarFormulario();
-
-    // Si el mes del registro coincide con el mes visible, agregar fila
     const claveReg   = `${anio}-${mes}`;
     const claveVista = mesesConDatos[mesSelIdx];
     if (claveReg === claveVista) {
       prependarFilaTabla(mov);
       actualizarFooter();
     }
-
     await recargarMeses();
     await actualizarBannerDia();
-
   } catch (err) {
     console.error(err);
     toast('Error al guardar. Intenta de nuevo.', 'error');
@@ -354,64 +321,44 @@ async function recargarMeses() {
 function renderSelectorMes() {
   const sel = document.getElementById('sel-mes');
   if (!sel) return;
-
   if (!mesesConDatos.length) {
     sel.innerHTML = '<option value="">Sin datos</option>';
     return;
   }
-
   sel.innerHTML = mesesConDatos.map((c, i) => {
     const [anio, mes] = c.split('-');
     return `<option value="${i}">${labelMes(parseInt(mes), parseInt(anio))}</option>`;
   }).join('');
-
-  sel.value = String(mesSelIdx);
-  sel.onchange = async () => {
-    mesSelIdx = parseInt(sel.value);
-    await renderTabla();
-  };
-
+  sel.value    = String(mesSelIdx);
+  sel.onchange = async () => { mesSelIdx = parseInt(sel.value); await renderTabla(); };
   document.getElementById('btn-mes-prev').onclick = async () => {
-    if (mesSelIdx < mesesConDatos.length - 1) {
-      mesSelIdx++;
-      sel.value = String(mesSelIdx);
-      await renderTabla();
-    }
+    if (mesSelIdx < mesesConDatos.length - 1) { mesSelIdx++; sel.value = String(mesSelIdx); await renderTabla(); }
   };
   document.getElementById('btn-mes-next').onclick = async () => {
-    if (mesSelIdx > 0) {
-      mesSelIdx--;
-      sel.value = String(mesSelIdx);
-      await renderTabla();
-    }
+    if (mesSelIdx > 0) { mesSelIdx--; sel.value = String(mesSelIdx); await renderTabla(); }
   };
 }
 
-// ── Estado de paginación ───────────────────────────────────
-const POR_PAGINA  = 15;
-let pagActual     = 1;
-let movsCache     = [];   // todos los movs del mes, para paginar en cliente
+const POR_PAGINA = 15;
+let pagActual    = 1;
+let movsCache    = [];
 
 async function renderTabla(resetPag = true) {
   const wrap = document.getElementById('tabla-movimientos');
   if (!wrap) return;
-
   if (!mesesConDatos.length) {
     wrap.innerHTML = emptyState('No hay movimientos aún. ¡Registra el primero!');
     document.getElementById('tabla-footer').innerHTML = '';
     return;
   }
-
-  const clave = mesesConDatos[mesSelIdx];
+  const clave      = mesesConDatos[mesSelIdx];
   const [anio, mes] = clave.split('-');
   movsCache = await getMovimientosMes(empresaCodigo, parseInt(mes), parseInt(anio));
-
   if (!movsCache.length) {
     wrap.innerHTML = emptyState('Sin movimientos en este mes.');
     document.getElementById('tabla-footer').innerHTML = '';
     return;
   }
-
   if (resetPag) pagActual = 1;
   renderPagina();
 }
@@ -419,14 +366,11 @@ async function renderTabla(resetPag = true) {
 function renderPagina() {
   const wrap = document.getElementById('tabla-movimientos');
   if (!wrap) return;
-
   const totalPags = Math.ceil(movsCache.length / POR_PAGINA);
   if (pagActual > totalPags) pagActual = totalPags;
-
-  const inicio = (pagActual - 1) * POR_PAGINA;
+  const inicio  = (pagActual - 1) * POR_PAGINA;
   const pagMovs = movsCache.slice(inicio, inicio + POR_PAGINA);
 
-  // Totales siempre del mes completo (no solo la página)
   let totalVenta = 0, totalGasto = 0, totalCompra = 0;
   movsCache.forEach(m => {
     const cat = (m.categoria || '').toLowerCase();
@@ -464,7 +408,6 @@ function renderPagina() {
       </table>
     </div>`;
 
-  // Paginación — solo si hay más de una página
   if (totalPags > 1) {
     wrap.innerHTML += `
       <div class="pagination">
@@ -472,7 +415,6 @@ function renderPagina() {
         <span class="pag-info">Pág. ${pagActual} de ${totalPags}</span>
         <button class="pag-arrow" id="pag-next" ${pagActual === totalPags ? 'disabled' : ''}>&#8250;</button>
       </div>`;
-
     document.getElementById('pag-prev').onclick = () => { pagActual--; renderPagina(); };
     document.getElementById('pag-next').onclick = () => { pagActual++; renderPagina(); };
   }
@@ -482,7 +424,7 @@ function renderPagina() {
 }
 
 function renderFooterTotales(v, g, c) {
-  const balance = v - g - c;
+  const balance  = v - g - c;
   const balColor = balance >= 0 ? 'var(--green)' : 'var(--red)';
   document.getElementById('tabla-footer').innerHTML = `
     <div class="reg-footer">
@@ -502,7 +444,6 @@ function renderFooterTotales(v, g, c) {
 }
 
 function actualizarFooter() {
-  // Lee siempre del cache completo del mes, no solo la página visible
   let v = 0, g = 0, c = 0;
   movsCache.forEach(m => {
     const cat = (m.categoria || '').toLowerCase();
@@ -522,9 +463,7 @@ function confirmarEliminar(movId) {
     onConfirm: async () => {
       try {
         await eliminarMovimiento(empresaCodigo, movId);
-        // Quitar del cache y redibujar página actual
         movsCache = movsCache.filter(m => m.id !== movId);
-        // Si la página actual quedó vacía, retroceder una
         const totalPags = Math.ceil(movsCache.length / POR_PAGINA);
         if (pagActual > totalPags && pagActual > 1) pagActual--;
         renderPagina();
@@ -538,29 +477,24 @@ function confirmarEliminar(movId) {
   });
 }
 
-// Agregar fila al inicio de la tabla sin recargar todo
 function prependarFilaTabla(m) {
-  movsCache.unshift(m); // insertar al inicio (más reciente primero)
-  pagActual = 1;        // volver a página 1 para ver el nuevo registro
+  movsCache.unshift(m);
+  pagActual = 1;
   renderPagina();
 }
 
-// ── Selector de empresa (cuando tiene varias al iniciar) ───
+// ── Selector de empresa (varias al iniciar) ────────────────
 function mostrarSelectorEmpresa(empresas, user) {
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('topbar').classList.add('hidden');
   document.getElementById('app').classList.add('hidden');
-
-  // Reusar empresa-screen con contenido dinámico
   const screen = document.getElementById('empresa-screen');
   screen.classList.remove('hidden');
-
-  // Reemplazar contenido del card
   const card = screen.querySelector('.login-card');
   card.innerHTML = `
     <div class="login-logo">Diar<span>IO</span></div>
     <p class="login-sub" style="margin-bottom:20px">¿A cuál local quieres entrar?</p>
-    <div id="selector-empresas" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
       ${empresas.map(e => `
         <button class="btn-empresa-sel" data-codigo="${e.codigo}">
           <span class="btn-empresa-nombre">${toSentenceCase(e.nombre)}</span>
@@ -572,21 +506,16 @@ function mostrarSelectorEmpresa(empresas, user) {
     <button class="btn-secondary" id="btn-unirse-empresa" style="width:100%;height:36px">Unirme</button>
     <p class="login-note">Selecciona un local para continuar.</p>
   `;
-
-  // Botones de selección
   card.querySelectorAll('.btn-empresa-sel').forEach(btn => {
     btn.addEventListener('click', async () => {
       showLoader();
-      const codigo = btn.dataset.codigo;
-      setEmpresaActual(codigo);
-      empresaCodigo = codigo;
-      await cargarSubcategorias(codigo);
+      setEmpresaActual(btn.dataset.codigo);
+      empresaCodigo = btn.dataset.codigo;
+      await cargarSubcategorias(empresaCodigo);
       screen.classList.add('hidden');
       await iniciarApp();
     });
   });
-
-  // Unirse a otra empresa
   card.querySelector('#btn-unirse-empresa')?.addEventListener('click', async () => {
     const codigo = card.querySelector('#inp-codigo-empresa').value.trim();
     if (!codigo) { toast('Ingresa el código del local.', 'error'); return; }
@@ -606,20 +535,16 @@ function mostrarSelectorEmpresa(empresas, user) {
   });
 }
 
-// ── Flujo de empresa (primer login — solo unirse con código) ─
+// ── Flujo de empresa (primer login) ───────────────────────
 function mostrarFlujoEmpresa(user) {
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('topbar').classList.add('hidden');
   document.getElementById('app').classList.add('hidden');
-
   const screen = document.getElementById('empresa-screen');
   screen.classList.remove('hidden');
-
-  // Limpiar listener previo
-  const btn = document.getElementById('btn-unirse-empresa');
+  const btn     = document.getElementById('btn-unirse-empresa');
   const btnNuevo = btn.cloneNode(true);
   btn.parentNode.replaceChild(btnNuevo, btn);
-
   document.getElementById('btn-unirse-empresa').addEventListener('click', async () => {
     const codigo = document.getElementById('inp-codigo-empresa').value.trim();
     if (!codigo) { toast('Ingresa el código del local.', 'error'); return; }
@@ -637,13 +562,9 @@ function mostrarFlujoEmpresa(user) {
       toast('Error al unirse al local.', 'error');
     }
   });
-
-  // Enter en el input también dispara
   document.getElementById('inp-codigo-empresa').addEventListener('keydown', e => {
     if (e.key === 'Enter') document.getElementById('btn-unirse-empresa').click();
   });
-
-  // Cerrar sesión desde esta pantalla
   document.getElementById('btn-logout-empresa')?.addEventListener('click', async () => {
     screen.classList.add('hidden');
     await logout();
