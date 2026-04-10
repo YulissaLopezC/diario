@@ -84,6 +84,8 @@ async function iniciarApp() {
 }
 
 // ── Topbar ─────────────────────────────────────────────────
+// ── Topbar ─────────────────────────────────────────────────
+// El listener del chip se registra UNA sola vez en bindNav()
 function renderTopbar() {
   const chip = document.getElementById('user-chip');
   if (!chip) return;
@@ -93,13 +95,9 @@ function renderTopbar() {
     ? `<img src="${foto}" alt="foto" />`
     : getInitials(userActual.displayName || userActual.email);
 
-  // Reemplazar el chip para limpiar listeners acumulados
-  const nuevoChip = chip.cloneNode(true);
-  chip.parentNode.replaceChild(nuevoChip, chip);
-  nuevoChip.querySelector('.user-avatar').innerHTML = avatarHtml;
-  nuevoChip.querySelector('.user-name').textContent =
+  chip.querySelector('.user-avatar').innerHTML = avatarHtml;
+  chip.querySelector('.user-name').textContent =
     (userActual.displayName || userActual.email).split(' ')[0];
-  nuevoChip.addEventListener('click', toggleUserMenu);
 }
 
 function toggleUserMenu() {
@@ -208,6 +206,13 @@ function bindNav() {
   document.getElementById('nav-dashboard').addEventListener('click', goToDashboard);
   document.getElementById('nav-registro').addEventListener('click', goToRegistro);
   document.getElementById('nav-informes').addEventListener('click', goToInformes);
+
+  // Listener del chip: una sola vez, usando delegación por ID
+  const chip = document.getElementById('user-chip');
+  if (chip && !chip.dataset.bound) {
+    chip.addEventListener('click', toggleUserMenu);
+    chip.dataset.bound = 'true';
+  }
 
   // Exponer navegación global para que dashboard.js pueda usarla
   window.__navTo = (page) => {
