@@ -267,6 +267,33 @@ async function initRegistro() {
     actualizarSubcats(selCat.value, document.getElementById('inp-subcategoria'));
   });
 
+  // Detectar cuando elige "+ Nueva subcategoría..." y abrir modal inmediatamente
+  selSub.addEventListener('change', () => {
+    if (selSub.value !== '__nueva__') return;
+    const cat = document.getElementById('inp-categoria').value;
+    showModal({
+      title: 'Nueva subcategoría',
+      description: `Nombre para la subcategoría de "${cat}":`,
+      placeholder: 'Ej: Domicilio, Nómina...',
+      confirmText: 'Crear',
+      onConfirm: async (nombre) => {
+        const ok = await agregarSubcategoria(empresaCodigo, cat, nombre);
+        const selSubActual = document.getElementById('inp-subcategoria');
+        if (ok) {
+          toast(`Subcategoría "${nombre}" creada.`);
+          actualizarSubcats(cat, selSubActual);
+        } else {
+          toast('Esa subcategoría ya existe.', 'info');
+          actualizarSubcats(cat, selSubActual);
+        }
+        // Seleccionar la subcategoría recién creada
+        selSubActual.value = nombre;
+      }
+    });
+    // Mientras tanto volver al valor vacío para no dejar "+ Nueva..." seleccionado
+    selSub.value = '';
+  });
+
   // Formato de número con puntos
   inpValor.addEventListener('input', () => {
     const raw = inpValor.value.replace(/\./g, '').replace(/[^0-9]/g, '');
@@ -307,27 +334,8 @@ async function agregarMovimientoUI() {
   const prov     = document.getElementById('inp-proveedor').value.trim();
   const factura  = document.getElementById('inp-factura').value.trim();
 
-  // Si eligió crear nueva subcategoría, mostrar modal primero
-  if (sub === '__nueva__') {
-    showModal({
-      title: 'Nueva subcategoría',
-      description: `Nombre para la subcategoría de "${cat}":`,
-      placeholder: 'Ej: Domicilio, Nómina...',
-      confirmText: 'Crear',
-      onConfirm: async (nombre) => {
-        const ok = await agregarSubcategoria(empresaCodigo, cat, nombre);
-        if (ok) {
-          toast(`Subcategoría "${nombre}" creada.`);
-          actualizarSubcats(cat, document.getElementById('inp-subcategoria'));
-          document.getElementById('inp-subcategoria').value = nombre;
-        } else {
-          toast('Esa subcategoría ya existe.', 'info');
-          document.getElementById('inp-subcategoria').value = nombre;
-        }
-      }
-    });
-    return;
-  }
+  // Si eligió crear nueva subcategoría no debería llegar aquí, pero por seguridad:
+  if (sub === '__nueva__') { selSub.value = ''; return; }
 
   if (!fechaISO) { toast('Selecciona una fecha.', 'error'); return; }
   if (!valorRaw || isNaN(parseFloat(valorRaw))) {
