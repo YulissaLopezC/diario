@@ -11,16 +11,16 @@
 
   <!-- Sidebar izquierdo -->
   <div class="inf-sidebar">
-    <div class="inf-sidebar-title">Exportar informe</div>
+    <div class="inf-sidebar-title">Filtros</div>
 
     <div class="field">
-      <label for="inf-mes-desde">Desde</label>
-      <select id="inf-mes-desde" class="month-select" style="width:100%"></select>
+      <label for="inf-fecha-desde">Desde</label>
+      <input type="date" id="inf-fecha-desde" />
     </div>
 
     <div class="field" style="margin-top:10px">
-      <label for="inf-mes-hasta">Hasta</label>
-      <select id="inf-mes-hasta" class="month-select" style="width:100%"></select>
+      <label for="inf-fecha-hasta">Hasta</label>
+      <input type="date" id="inf-fecha-hasta" />
     </div>
 
     <div class="field" style="margin-top:10px">
@@ -30,31 +30,54 @@
         <option value="venta">Ventas</option>
         <option value="gasto">Gastos</option>
         <option value="compra">Compras</option>
+        <option value="movimiento">Movimientos</option>
+      </select>
+    </div>
+
+    <div class="field" style="margin-top:10px">
+      <label for="inf-subcat">Subcategoría</label>
+      <select id="inf-subcat">
+        <option value="todas">Todas</option>
       </select>
     </div>
 
     <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px">
-      <button class="btn-inf-excel" id="inf-btn-excel">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <polyline points="14 2 14 8 20 8"/>
-        </svg>
-        Descargar Excel
-      </button>
-      <button class="btn-inf-csv" id="inf-btn-csv">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
-        </svg>
-        Descargar CSV
-      </button>
-      <button class="btn-inf-preview" id="inf-btn-previa">
-        Ver vista previa
-      </button>
+
+      <div class="inf-export-group">
+        <div class="inf-export-label">Informe general</div>
+        <button class="btn-inf-preview" id="inf-btn-previa">Ver vista previa</button>
+        <button class="btn-inf-excel"   id="inf-btn-excel">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          Descargar Excel
+        </button>
+        <button class="btn-inf-csv" id="inf-btn-csv">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+          </svg>
+          Descargar CSV
+        </button>
+      </div>
+
+      <div class="inf-export-group" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
+        <div class="inf-export-label">Libro fiscal</div>
+        <button class="btn-inf-preview" id="inf-btn-libro-previa">Ver libro fiscal</button>
+        <button class="btn-inf-excel"   id="inf-btn-libro-excel">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          Descargar libro fiscal
+        </button>
+      </div>
+
     </div>
 
     <div class="inf-tip">
-      <div class="inf-tip-label">Consejo</div>
-      <p>El Excel usa punto y coma como separador — compatible con libro fiscal colombiano.</p>
+      <div class="inf-tip-label">Libro fiscal</div>
+      <p>Agrupa por día mostrando el total de Ventas, Compras y Gastos. Compatible con libro de contabilidad colombiano.</p>
     </div>
   </div>
 
@@ -64,13 +87,17 @@
     <!-- Métricas resumen -->
     <div class="card inf-preview-card">
       <div class="inf-preview-head">
-        <span class="inf-preview-title">Vista previa</span>
+        <span class="inf-preview-title">Resumen del período</span>
         <span class="inf-preview-badge" id="inf-periodo-badge">Selecciona un rango</span>
       </div>
-      <div class="inf-metrics-row" id="inf-metrics">
+      <div class="inf-metrics-row">
         <div class="inf-metric">
           <div class="inf-metric-label">Total ventas</div>
           <div class="inf-metric-val" style="color:var(--green)" id="inf-total-ventas">—</div>
+        </div>
+        <div class="inf-metric">
+          <div class="inf-metric-label">Total compras</div>
+          <div class="inf-metric-val" style="color:var(--blue)" id="inf-total-compras">—</div>
         </div>
         <div class="inf-metric">
           <div class="inf-metric-label">Total gastos</div>
@@ -83,12 +110,12 @@
       </div>
     </div>
 
-    <!-- Tabla de movimientos -->
+    <!-- Tabla de movimientos / libro fiscal -->
     <div class="card">
-      <div class="inf-tabla-title">Movimientos del período</div>
+      <div class="inf-tabla-title" id="inf-tabla-titulo">Movimientos del período</div>
       <div id="inf-tabla-wrap">
         <p style="font-size:12px;color:var(--text-3);padding:16px 0">
-          Selecciona un rango y haz clic en <strong>Ver vista previa</strong>.
+          Selecciona un rango y haz clic en <strong>Ver vista previa</strong> o <strong>Ver libro fiscal</strong>.
         </p>
       </div>
     </div>
