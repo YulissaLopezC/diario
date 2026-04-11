@@ -617,6 +617,33 @@ function abrirModalEdicion(movId) {
 
   // Actualizar subcategorías al cambiar categoría
   const selCat = backdrop.querySelector('#edit-cat');
+  const selCuenta = backdrop.querySelector('#edit-cuenta');
+  selCuenta.addEventListener('change', () => {
+    if (selCuenta.value !== '__nueva_cuenta__') return;
+    showModal({
+      title: 'Nueva cuenta',
+      description: 'Nombre de la cuenta (ej: Davivienda, Caja Menor):',
+      placeholder: 'Nombre de la cuenta',
+      confirmText: 'Crear',
+      onConfirm: async (nombre) => {
+        const ok = await agregarCuenta(empresaCodigo, nombre);
+        if (ok) {
+          toast(`Cuenta "${nombre}" creada.`);
+          // Reconstruir opciones incluyendo la nueva
+          const cuentasActualizadas = getCuentas();
+          selCuenta.innerHTML =
+            cuentasActualizadas.map(c => `<option value="${c}">${c}</option>`).join('') +
+            '<option value="__nueva_cuenta__">+ Nueva cuenta...</option>';
+        } else {
+          toast('Esa cuenta ya existe.', 'info');
+        }
+        selCuenta.value = nombre;
+      }
+    });
+    // Resetear mientras se decide
+    selCuenta.value = toSentenceCase(mov.cuenta || 'EFECTIVO');
+  });
+
   const selSub = backdrop.querySelector('#edit-sub');
   selCat.addEventListener('change', () => actualizarSubcats(selCat.value, selSub));
 
@@ -650,11 +677,14 @@ function abrirModalEdicion(movId) {
     }
 
     try {
+        let cuentaVal = backdrop.querySelector('#edit-cuenta')?.value || CUENTA_DEFAULT;
+        if (cuentaVal === '__nueva_cuenta__') cuentaVal = CUENTA_DEFAULT;
+
       const actualizado = await editarMovimiento(empresaCodigo, movId, {
         fecha:        fechaDisplay,
         categoria:    selCat.value,
         subcategoria: subVal,
-        cuenta:       backdrop.querySelector('#edit-cuenta')?.value || CUENTA_DEFAULT,
+        cuenta:       cuentaVal,
         valor:        valorRaw,
         proveedor:    backdrop.querySelector('#edit-prov').value.trim(),
         factura:      backdrop.querySelector('#edit-fact').value.trim(),
