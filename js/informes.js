@@ -2,7 +2,7 @@
 // Informes con rango de fechas libre, filtro subcategoría y libro fiscal
 
 import { getMovimientosRango } from './movimientos.js';
-import { formatCOP, toSentenceCase, hoyISO, isoADisplay } from './ui.js';
+import { formatCOP, toSentenceCase, hoyISO, isoADisplay, toast } from './ui.js';
 import { empresaActual } from './empresa.js';
 import { getSubcategorias } from './subcategorias.js';
 
@@ -135,6 +135,10 @@ function actualizarMetricas(movs) {
 
 // ── Vista previa general ───────────────────────────────────
 async function cargarVistaGeneral(empresaCodigo) {
+  const { desde, hasta } = getFiltros();
+  if (!desde || !hasta) {
+    toast('Selecciona un rango de fechas.', 'error'); return;
+  }
   const movs = await getMovsFiltrados(empresaCodigo);
   actualizarMetricas(movs);
 
@@ -288,7 +292,7 @@ function agruparPorDia(movs) {
 // ── Exportar CSV general ───────────────────────────────────
 async function exportarCSV(empresaCodigo) {
   const movs = await getMovsFiltrados(empresaCodigo);
-  if (!movs.length) { alert('No hay datos para exportar.'); return; }
+  if (!movs.length) { toast('No hay datos para exportar.', 'error'); return; }
 
   const cabecera = ['Fecha','Categoria','Subcategoria','Cuenta','Valor','Proveedor','Factura'];
   const filas = movs.map(m => [
@@ -311,7 +315,7 @@ async function exportarCSV(empresaCodigo) {
 // ── Exportar Excel general ─────────────────────────────────
 async function exportarExcel(empresaCodigo) {
   const movs = await getMovsFiltrados(empresaCodigo);
-  if (!movs.length) { alert('No hay datos para exportar.'); return; }
+  if (!movs.length) { toast('No hay datos para exportar.', 'error'); return; }
 
   const bom = '\uFEFF';
   const cabecera = ['Fecha','Categoria','Subcategoria','Cuenta','Valor','Proveedor','Factura'];
@@ -332,7 +336,7 @@ async function exportarExcel(empresaCodigo) {
 // ── Exportar Libro Fiscal Excel ────────────────────────────
 async function exportarLibroFiscal(empresaCodigo) {
   const { desde, hasta } = getFiltros();
-  if (!desde || !hasta) { alert('Selecciona un rango de fechas.'); return; }
+  if (!desde || !hasta) { toast('Selecciona un rango de fechas.', 'error'); return; }
 
   const { claveDesde, claveHasta } = fechasAClaves(desde, hasta);
   let movs = await getMovimientosRango(empresaCodigo, claveDesde, claveHasta);
@@ -344,7 +348,7 @@ async function exportarLibroFiscal(empresaCodigo) {
     return fechaISO >= desde && fechaISO <= hasta && m.categoria !== 'MOVIMIENTO';
   });
 
-  if (!movs.length) { alert('No hay datos para exportar.'); return; }
+  if (!movs.length) { toast('No hay datos para exportar.', 'error'); return; }
 
   const agrupado = agruparPorDia(movs);
   const diasOrdenados = Object.keys(agrupado).sort((a, b) => {
