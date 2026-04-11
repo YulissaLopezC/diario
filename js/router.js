@@ -3,8 +3,8 @@
 
 import { initAuth, loginConGoogle, logout, getInitials } from './auth.js';
 import { cargarEmpresasDelUsuario, crearEmpresa, unirseAEmpresa, empresaActual, misEmpresas, setEmpresaActual, exposeAdminTools } from './empresa.js';
-import { cargarSubcategorias } from './subcategorias.js';
-import { agregarMovimiento, getMovimientosMes, getMesesConDatos, eliminarMovimiento, getMovimientosDia } from './movimientos.js';
+import { cargarSubcategorias, getSubcategorias, agregarSubcategoria } from './subcategorias.js';
+import { agregarMovimiento, getMovimientosMes, getMesesConDatos, eliminarMovimiento, editarMovimiento, getMovimientosDia } from './movimientos.js';
 import { renderDashboard } from './dashboard.js';
 import { initInformes } from './informes.js';
 import {
@@ -234,6 +234,7 @@ async function actualizarBannerDia() {
     if (cat === 'venta')  v += m.valor;
     if (cat === 'gasto')  g += m.valor;
     if (cat === 'compra') c += m.valor;
+    // movimiento excluido intencionalmente
   });
   const balance  = v - g - c;
   const balColor = balance >= 0 ? 'var(--green)' : 'var(--red)';
@@ -248,13 +249,23 @@ async function actualizarBannerDia() {
 
 // ── Pantalla de Registro ───────────────────────────────────
 async function initRegistro() {
-  const inpFecha   = document.getElementById('inp-fecha');
-  inpFecha.value   = hoyISO();
+  const inpFecha = document.getElementById('inp-fecha');
+  inpFecha.value = hoyISO();
 
   // Limpiar listeners acumulados reemplazando los nodos
   const inpValor   = reemplazar('inp-valor');
   const inpFactura = reemplazar('inp-factura');
   const btnAgregar = reemplazar('btn-agregar');
+  const selCat     = reemplazar('inp-categoria');
+  const selSub     = reemplazar('inp-subcategoria');
+
+  // Cargar subcategorías según categoría inicial
+  actualizarSubcats(selCat.value, selSub);
+
+  // Cambiar subcategorías al cambiar categoría
+  selCat.addEventListener('change', () => {
+    actualizarSubcats(selCat.value, document.getElementById('inp-subcategoria'));
+  });
 
   // Formato de número con puntos
   inpValor.addEventListener('input', () => {
@@ -270,6 +281,15 @@ async function initRegistro() {
   await actualizarBannerDia();
 }
 
+function actualizarSubcats(categoria, selSub) {
+  if (!selSub) return;
+  const subs = getSubcategorias(categoria);
+  selSub.innerHTML =
+    '<option value="">— Sin subcategoría —</option>' +
+    subs.map(s => `<option value="${s}">${s}</option>`).join('') +
+    '<option value="__nueva__">+ Nueva subcategoría...</option>';
+}
+
 // Reemplaza un nodo por su clon limpio (sin listeners) y lo devuelve
 function reemplazar(id) {
   const el    = document.getElementById(id);
@@ -281,9 +301,33 @@ function reemplazar(id) {
 async function agregarMovimientoUI() {
   const fechaISO = document.getElementById('inp-fecha').value;
   const cat      = document.getElementById('inp-categoria').value;
+  const selSub   = document.getElementById('inp-subcategoria');
+  const sub      = selSub?.value || '';
   const valorRaw = document.getElementById('inp-valor').value.replace(/\./g, '').trim();
   const prov     = document.getElementById('inp-proveedor').value.trim();
   const factura  = document.getElementById('inp-factura').value.trim();
+
+  // Si eligió crear nueva subcategoría, mostrar modal primero
+  if (sub === '__nueva__') {
+    showModal({
+      title: 'Nueva subcategoría',
+      description: `Nombre para la subcategoría de "${cat}":`,
+      placeholder: 'Ej: Domicilio, Nómina...',
+      confirmText: 'Crear',
+      onConfirm: async (nombre) => {
+        const ok = await agregarSubcategoria(empresaCodigo, cat, nombre);
+        if (ok) {
+          toast(`Subcategoría "${nombre}" creada.`);
+          actualizarSubcats(cat, document.getElementById('inp-subcategoria'));
+          document.getElementById('inp-subcategoria').value = nombre;
+        } else {
+          toast('Esa subcategoría ya existe.', 'info');
+          document.getElementById('inp-subcategoria').value = nombre;
+        }
+      }
+    });
+    return;
+  }
 
   if (!fechaISO) { toast('Selecciona una fecha.', 'error'); return; }
   if (!valorRaw || isNaN(parseFloat(valorRaw))) {
@@ -295,7 +339,8 @@ async function agregarMovimientoUI() {
 
   try {
     const mov = await agregarMovimiento(empresaCodigo, userActual.uid, {
-      fecha: fechaDisplay, categoria: cat, subcategoria: '',
+      fecha: fechaDisplay, categoria: cat,
+      subcategoria: sub === '' ? '' : sub,
       valor: valorRaw, proveedor: prov, factura
     });
     toast('Movimiento guardado.');
@@ -319,6 +364,9 @@ function limpiarFormulario() {
   document.getElementById('inp-valor').value     = '';
   document.getElementById('inp-proveedor').value = '';
   document.getElementById('inp-factura').value   = '';
+  // Resetear subcategoría al valor vacío
+  const selSub = document.getElementById('inp-subcategoria');
+  if (selSub) selSub.value = '';
   document.getElementById('inp-categoria').focus();
 }
 
@@ -388,20 +436,26 @@ function renderPagina() {
     if (cat === 'venta')  totalVenta  += m.valor;
     if (cat === 'gasto')  totalGasto  += m.valor;
     if (cat === 'compra') totalCompra += m.valor;
+    // 'movimiento' se excluye intencionalmente de los totales
   });
 
   const filas = pagMovs.map(m => {
     const cat     = (m.categoria || '').toLowerCase();
     const prov    = m.proveedor ? toSentenceCase(m.proveedor) : '<span style="color:var(--text-3)">—</span>';
     const factura = m.factura   || '<span style="color:var(--text-3)">—</span>';
+    const subcat  = m.subcategoria ? `<span style="font-size:11px;color:var(--text-3)">${toSentenceCase(m.subcategoria)}</span>` : '';
     return `<tr data-id="${m.id}" data-cat="${cat}" data-valor="${m.valor}">
       <td>${m.fecha}</td>
-      <td><span class="badge badge-${cat}">${toSentenceCase(m.categoria)}</span></td>
+      <td>
+        <span class="badge badge-${cat}">${toSentenceCase(m.categoria)}</span>
+        ${subcat}
+      </td>
       <td>${prov}</td>
       <td style="font-family:var(--font-mono);font-size:12px">${factura}</td>
       <td class="amount ${cat}">${formatCOP(m.valor)}</td>
-      <td style="width:32px;text-align:center">
-        <button class="btn-del" title="Eliminar" onclick="window.__delMov('${m.id}')">&#x2715;</button>
+      <td style="width:56px;text-align:center;display:flex;gap:4px;justify-content:center">
+        <button class="btn-edit" title="Editar"  onclick="window.__editMov('${m.id}')">&#9998;</button>
+        <button class="btn-del"  title="Eliminar" onclick="window.__delMov('${m.id}')">&#x2715;</button>
       </td>
     </tr>`;
   }).join('');
@@ -431,7 +485,132 @@ function renderPagina() {
   }
 
   renderFooterTotales(totalVenta, totalGasto, totalCompra);
-  window.__delMov = (id) => confirmarEliminar(id);
+  window.__delMov  = (id) => confirmarEliminar(id);
+  window.__editMov = (id) => abrirModalEdicion(id);
+}
+
+function abrirModalEdicion(movId) {
+  const mov = movsCache.find(m => m.id === movId);
+  if (!mov) return;
+
+  // Convertir fecha DD/MM/YYYY → YYYY-MM-DD para input type=date
+  const parts    = mov.fecha.split('/');
+  const fechaISO = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : '';
+
+  // Construir opciones de categoría
+  const categorias = ['Venta','Gasto','Compra','Movimiento'];
+  const opsCat = categorias.map(c =>
+    `<option value="${c}" ${c.toUpperCase() === mov.categoria ? 'selected' : ''}>${c}</option>`
+  ).join('');
+
+  // Construir opciones de subcategoría
+  const catActual = toSentenceCase(mov.categoria);
+  const subs      = getSubcategorias(catActual);
+  const opsSub =
+    '<option value="">— Sin subcategoría —</option>' +
+    subs.map(s => `<option value="${s}" ${s.toUpperCase() === mov.subcategoria ? 'selected' : ''}>${s}</option>`).join('') +
+    '<option value="__nueva__">+ Nueva subcategoría...</option>';
+
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop';
+  backdrop.innerHTML = `
+    <div class="modal" style="max-width:440px">
+      <h3>Editar movimiento</h3>
+      <p>Modifica los campos y guarda los cambios.</p>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div class="field">
+          <label>Fecha</label>
+          <input type="date" id="edit-fecha" value="${fechaISO}" />
+        </div>
+        <div class="field">
+          <label>Categoría</label>
+          <select id="edit-cat">${opsCat}</select>
+        </div>
+        <div class="field">
+          <label>Subcategoría</label>
+          <select id="edit-sub">${opsSub}</select>
+        </div>
+        <div class="field">
+          <label>Valor</label>
+          <input type="text" id="edit-valor" value="${(mov.valor || 0).toLocaleString('es-CO')}" inputmode="numeric" />
+        </div>
+        <div class="field">
+          <label>Proveedor</label>
+          <input type="text" id="edit-prov" value="${mov.proveedor ? toSentenceCase(mov.proveedor) : ''}" placeholder="Opcional" />
+        </div>
+        <div class="field">
+          <label>N° Factura</label>
+          <input type="text" id="edit-fact" value="${mov.factura || ''}" placeholder="Opcional" />
+        </div>
+      </div>
+
+      <div class="modal-btns">
+        <button class="btn-secondary" id="edit-cancelar">Cancelar</button>
+        <button class="btn-primary"   id="edit-guardar">Guardar cambios</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(backdrop);
+
+  // Actualizar subcategorías al cambiar categoría
+  const selCat = backdrop.querySelector('#edit-cat');
+  const selSub = backdrop.querySelector('#edit-sub');
+  selCat.addEventListener('change', () => actualizarSubcats(selCat.value, selSub));
+
+  // Formato de número
+  const inpValor = backdrop.querySelector('#edit-valor');
+  inpValor.addEventListener('input', () => {
+    const raw = inpValor.value.replace(/\./g, '').replace(/[^0-9]/g, '');
+    inpValor.value = raw ? parseInt(raw, 10).toLocaleString('es-CO') : '';
+  });
+
+  const close = () => backdrop.remove();
+  backdrop.querySelector('#edit-cancelar').addEventListener('click', close);
+  backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
+
+  backdrop.querySelector('#edit-guardar').addEventListener('click', async () => {
+    const fechaISO2 = backdrop.querySelector('#edit-fecha').value;
+    if (!fechaISO2) { toast('Selecciona una fecha.', 'error'); return; }
+
+    const [y, mo, d] = fechaISO2.split('-');
+    const fechaDisplay = `${d}/${mo}/${y}`;
+    const valorRaw = inpValor.value.replace(/\./g, '').trim();
+
+    if (!valorRaw || isNaN(parseFloat(valorRaw))) {
+      toast('Ingresa un valor válido.', 'error'); return;
+    }
+
+    let subVal = selSub.value;
+    if (subVal === '__nueva__') {
+      toast('Crea la subcategoría desde el formulario principal.', 'info');
+      return;
+    }
+
+    try {
+      const actualizado = await editarMovimiento(empresaCodigo, movId, {
+        fecha:        fechaDisplay,
+        categoria:    selCat.value,
+        subcategoria: subVal,
+        valor:        valorRaw,
+        proveedor:    backdrop.querySelector('#edit-prov').value.trim(),
+        factura:      backdrop.querySelector('#edit-fact').value.trim(),
+      });
+
+      // Actualizar en el cache local
+      const idx = movsCache.findIndex(m => m.id === movId);
+      if (idx !== -1) movsCache[idx] = actualizado;
+
+      close();
+      renderPagina();
+      await actualizarBannerDia();
+      toast('Movimiento actualizado.');
+    } catch (err) {
+      console.error(err);
+      toast('Error al guardar. Intenta de nuevo.', 'error');
+    }
+  });
 }
 
 function renderFooterTotales(v, g, c) {

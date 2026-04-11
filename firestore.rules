@@ -26,10 +26,10 @@ service cloud.firestore {
         allow read, write: if request.auth != null;
       }
 
-      // Movimientos: solo autenticados (la membresía se valida en JS)
+      // Movimientos: solo autenticados
       match /movimientos/{movId} {
         allow read, create, delete: if request.auth != null;
-        allow update: if false;
+        allow update: if request.auth != null;
       }
     }
   }

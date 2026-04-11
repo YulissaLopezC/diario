@@ -230,6 +230,7 @@ function totales(movs) {
     if (cat === 'venta')  acc.venta  += m.valor;
     if (cat === 'gasto')  acc.gasto  += m.valor;
     if (cat === 'compra') acc.compra += m.valor;
+    // 'movimiento' excluido de los totales — no afecta utilidad
     return acc;
   }, { venta: 0, gasto: 0, compra: 0 });
 }

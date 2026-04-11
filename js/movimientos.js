@@ -3,7 +3,7 @@
 
 import {
   collection, addDoc, query, where,
-  getDocs, Timestamp, doc, deleteDoc
+  getDocs, Timestamp, doc, deleteDoc, updateDoc
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { db } from './firebase.js';
 import { toUpperStorage, claveMes, parseFecha } from './ui.js';
@@ -82,6 +82,30 @@ export async function getMovimientosDia(empresaCodigo, fechaDisplay) {
   const snap = await getDocs(q);
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
+// ── Editar un movimiento ───────────────────────────────────
+export async function editarMovimiento(empresaCodigo, movId, datos) {
+  const parsed = parseFecha(datos.fecha);
+  if (!parsed) throw new Error('Fecha inválida');
+
+  const cambios = {
+    fecha:        datos.fecha.trim(),
+    dia:          parsed.dia,
+    mes:          parsed.mes,
+    anio:         parsed.anio,
+    claveMes:     claveMes(parsed.mes, parsed.anio),
+    categoria:    toUpperStorage(datos.categoria),
+    subcategoria: toUpperStorage(datos.subcategoria || ''),
+    valor:        parseFloat(String(datos.valor).replace(/[^0-9.]/g, '')) || 0,
+    proveedor:    toUpperStorage(datos.proveedor || ''),
+    factura:      toUpperStorage(datos.factura   || ''),
+  };
+
+  const ref = doc(db, 'empresas', empresaCodigo, 'movimientos', movId);
+  await updateDoc(ref, cambios);
+  return { id: movId, ...cambios };
+}
+
+// ── Eliminar un movimiento ─────────────────────────────────
 export async function eliminarMovimiento(empresaCodigo, movId) {
   const ref = doc(db, 'empresas', empresaCodigo, 'movimientos', movId);
   await deleteDoc(ref);
