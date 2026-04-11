@@ -309,7 +309,7 @@ async function exportarCSV(empresaCodigo) {
     .map(row => row.map(c => `"${String(c).replace(/"/g,'""')}"`).join(','))
     .join('\n');
 
-  descargar(csv, 'text/csv', nombreArchivo('csv'));
+  descargar(csv, 'text/csv', nombreArchivo('', 'csv'));
 }
 
 // ── Exportar Excel general ─────────────────────────────────
@@ -330,7 +330,7 @@ async function exportarExcel(empresaCodigo) {
   ]);
 
   const csv = bom + [cabecera, ...filas].map(row => row.join(';')).join('\n');
-  descargar(csv, 'text/csv;charset=utf-8', nombreArchivo('excel.csv'));
+  descargar(csv, 'text/csv;charset=utf-8', nombreArchivo('', 'csv'));
 }
 
 // ── Exportar Libro Fiscal Excel ────────────────────────────
@@ -393,7 +393,7 @@ async function exportarLibroFiscal(empresaCodigo) {
   lineas.push(`Balance neto;${totV - totC - totG}`);
 
   const csv = bom + lineas.join('\n');
-  descargar(csv, 'text/csv;charset=utf-8', nombreArchivo('libro_fiscal.csv'));
+  descargar(csv, 'text/csv;charset=utf-8', nombreArchivo('libro_fiscal', 'csv'));
 }
 
 // ── Helpers ────────────────────────────────────────────────
@@ -406,8 +406,9 @@ function descargar(contenido, tipo, nombre) {
   URL.revokeObjectURL(url);
 }
 
-function nombreArchivo(ext) {
+function nombreArchivo(sufijo, ext) {
   const { desde, hasta } = getFiltros();
   const empresa = empresaActual?.nombre?.slice(0, 10).replace(/\s/g, '_') || 'empresa';
-  return `DiarIO_${empresa}_${desde}_${hasta}.${ext}`;
+  const base    = `DiarIO_${empresa}_${desde}_${hasta}`;
+  return sufijo ? `${base}_${sufijo}.${ext}` : `${base}.${ext}`;
 }
