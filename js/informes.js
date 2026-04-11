@@ -131,6 +131,7 @@ function renderVistaPrevia(movs) {
       <td>${m.fecha}</td>
       <td><span class="badge badge-${m.categoria.toLowerCase()}">${toSentenceCase(m.categoria)}</span></td>
       <td>${m.proveedor ? toSentenceCase(m.proveedor) : '<span style="color:var(--text-3)">—</span>'}</td>
+      <td><span class="cuenta-tag">${toSentenceCase(m.cuenta || 'EFECTIVO')}</span></td>
       <td style="font-family:var(--font-mono);font-size:12px">${m.factura || '<span style="color:var(--text-3)">—</span>'}</td>
       <td style="text-align:right">${debito}</td>
       <td style="text-align:right">${credito}</td>
@@ -152,7 +153,7 @@ function renderVistaPrevia(movs) {
         <thead>
           <tr>
             <th>Fecha</th><th>Categoría</th><th>Proveedor</th>
-            <th>N° Factura</th>
+            <th>Cuenta</th><th>N° Factura</th>
             <th style="text-align:right">Débito</th>
             <th style="text-align:right">Crédito</th>
           </tr>
@@ -171,11 +172,12 @@ async function exportarCSV(empresaCodigo) {
   const movs = await getMovsFiltrados(empresaCodigo);
   if (!movs.length) { alert('No hay datos para exportar.'); return; }
 
-  const cabecera = ['Fecha','Categoria','Subcategoria','Valor','Proveedor','Factura'];
+  const cabecera = ['Fecha','Categoria','Subcategoria','Cuenta','Valor','Proveedor','Factura'];
   const filas = movs.map(m => [
     m.fecha,
     toSentenceCase(m.categoria),
-    toSentenceCase(m.subcategoria),
+    toSentenceCase(m.subcategoria || ''),
+    toSentenceCase(m.cuenta || 'EFECTIVO'),
     m.valor,
     m.proveedor ? toSentenceCase(m.proveedor) : '',
     m.factura || ''
@@ -193,20 +195,20 @@ async function exportarExcel(empresaCodigo) {
   const movs = await getMovsFiltrados(empresaCodigo);
   if (!movs.length) { alert('No hay datos para exportar.'); return; }
 
-  // BOM para que Excel abra UTF-8 correctamente
   const bom = '\uFEFF';
-  const cabecera = ['Fecha','Categoria','Subcategoria','Valor','Proveedor','Factura'];
+  const cabecera = ['Fecha','Categoria','Subcategoria','Cuenta','Valor','Proveedor','Factura'];
   const filas = movs.map(m => [
     m.fecha,
     toSentenceCase(m.categoria),
-    toSentenceCase(m.subcategoria),
+    toSentenceCase(m.subcategoria || ''),
+    toSentenceCase(m.cuenta || 'EFECTIVO'),
     m.valor,
     m.proveedor ? toSentenceCase(m.proveedor) : '',
     m.factura || ''
   ]);
 
   const csv = bom + [cabecera, ...filas]
-    .map(row => row.join(';'))  // punto y coma para Excel español
+    .map(row => row.join(';'))
     .join('\n');
 
   descargar(csv, 'text/csv;charset=utf-8', nombreArchivo('excel.csv'));

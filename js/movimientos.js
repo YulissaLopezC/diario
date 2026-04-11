@@ -19,14 +19,15 @@ export async function agregarMovimiento(empresaCodigo, userId, datos) {
   const parsed = parseFecha(datos.fecha);
   if (!parsed) throw new Error('Fecha inválida');
 
-  const doc = {
+  const docData = {
     fecha:         datos.fecha.trim(),
     dia:           parsed.dia,
     mes:           parsed.mes,
     anio:          parsed.anio,
     claveMes:      claveMes(parsed.mes, parsed.anio),
     categoria:     toUpperStorage(datos.categoria),
-    subcategoria:  toUpperStorage(datos.subcategoria),
+    subcategoria:  toUpperStorage(datos.subcategoria || ''),
+    cuenta:        toUpperStorage(datos.cuenta || 'EFECTIVO'),
     valor:         parseFloat(String(datos.valor).replace(/[^0-9.]/g, '')) || 0,
     proveedor:     toUpperStorage(datos.proveedor || ''),
     factura:       toUpperStorage(datos.factura   || ''),
@@ -34,8 +35,8 @@ export async function agregarMovimiento(empresaCodigo, userId, datos) {
     creadoEn:      Timestamp.now()
   };
 
-  const ref = await addDoc(refMovimientos(empresaCodigo), doc);
-  return { id: ref.id, ...doc };
+  const ref = await addDoc(refMovimientos(empresaCodigo), docData);
+  return { id: ref.id, ...docData };
 }
 
 // ── Leer movimientos de un mes ─────────────────────────────
@@ -95,6 +96,7 @@ export async function editarMovimiento(empresaCodigo, movId, datos) {
     claveMes:     claveMes(parsed.mes, parsed.anio),
     categoria:    toUpperStorage(datos.categoria),
     subcategoria: toUpperStorage(datos.subcategoria || ''),
+    cuenta:       toUpperStorage(datos.cuenta || 'EFECTIVO'),
     valor:        parseFloat(String(datos.valor).replace(/[^0-9.]/g, '')) || 0,
     proveedor:    toUpperStorage(datos.proveedor || ''),
     factura:      toUpperStorage(datos.factura   || ''),

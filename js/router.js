@@ -4,6 +4,7 @@
 import { initAuth, loginConGoogle, logout, getInitials } from './auth.js';
 import { cargarEmpresasDelUsuario, crearEmpresa, unirseAEmpresa, empresaActual, misEmpresas, setEmpresaActual, exposeAdminTools } from './empresa.js';
 import { cargarSubcategorias, getSubcategorias, agregarSubcategoria } from './subcategorias.js';
+import { cargarCuentas, getCuentas, agregarCuenta, CUENTA_DEFAULT } from './cuentas.js';
 import { agregarMovimiento, getMovimientosMes, getMesesConDatos, eliminarMovimiento, editarMovimiento, getMovimientosDia } from './movimientos.js';
 import { renderDashboard } from './dashboard.js';
 import { initInformes } from './informes.js';
@@ -44,6 +45,7 @@ async function onLogin(user) {
     empresaCodigo = empresas[0].codigo;
     setEmpresaActual(empresaCodigo);
     await cargarSubcategorias(empresaCodigo);
+    await cargarCuentas(empresaCodigo);
     await iniciarApp();
   } catch (err) {
     console.error(err);
@@ -146,6 +148,7 @@ function abrirUserMenu(e) {
       setEmpresaActual(codigo);
       empresaCodigo = codigo;
       await cargarSubcategorias(codigo);
+      await cargarCuentas(codigo);
       renderTopbar();
       await goToDashboard();
       hideLoader();
@@ -174,6 +177,7 @@ function mostrarModalUnirse() {
         const empresa = await unirseAEmpresa(codigo, userActual.uid, userActual.email, userActual.displayName || '');
         if (!empresa) { hideLoader(); return; }
         await cargarSubcategorias(empresa.codigo);
+      await cargarCuentas(empresa.codigo);
         empresaCodigo = empresa.codigo;
         renderTopbar();
         await goToDashboard();
@@ -258,9 +262,36 @@ async function initRegistro() {
   const btnAgregar = reemplazar('btn-agregar');
   const selCat     = reemplazar('inp-categoria');
   const selSub     = reemplazar('inp-subcategoria');
+  const selCuenta  = reemplazar('inp-cuenta');
+
+  // Llenar select de cuentas
+  actualizarSelectCuentas(selCuenta);
 
   // Cargar subcategorías según categoría inicial
   actualizarSubcats(selCat.value, selSub);
+
+  // Detectar nueva cuenta
+  selCuenta.addEventListener('change', () => {
+    if (selCuenta.value !== '__nueva_cuenta__') return;
+    showModal({
+      title: 'Nueva cuenta',
+      description: 'Nombre de la cuenta (ej: Davivienda, Caja Menor):',
+      placeholder: 'Nombre de la cuenta',
+      confirmText: 'Crear',
+      onConfirm: async (nombre) => {
+        const ok = await agregarCuenta(empresaCodigo, nombre);
+        const sel = document.getElementById('inp-cuenta');
+        if (ok) {
+          toast(`Cuenta "${nombre}" creada.`);
+          actualizarSelectCuentas(sel);
+        } else {
+          toast('Esa cuenta ya existe.', 'info');
+        }
+        sel.value = nombre;
+      }
+    });
+    selCuenta.value = CUENTA_DEFAULT;
+  });
 
   // Cambiar subcategorías al cambiar categoría
   selCat.addEventListener('change', () => {
@@ -308,6 +339,14 @@ async function initRegistro() {
   await actualizarBannerDia();
 }
 
+function actualizarSelectCuentas(sel) {
+  if (!sel) return;
+  const cuentas = getCuentas();
+  sel.innerHTML =
+    cuentas.map(c => `<option value="${c}" ${c === CUENTA_DEFAULT ? 'selected' : ''}>${c}</option>`).join('') +
+    '<option value="__nueva_cuenta__">+ Nueva cuenta...</option>';
+}
+
 function actualizarSubcats(categoria, selSub) {
   if (!selSub) return;
   const subs = getSubcategorias(categoria);
@@ -330,6 +369,7 @@ async function agregarMovimientoUI() {
   const cat      = document.getElementById('inp-categoria').value;
   const selSub   = document.getElementById('inp-subcategoria');
   const sub      = selSub?.value || '';
+  const cuenta   = document.getElementById('inp-cuenta')?.value || CUENTA_DEFAULT;
   const valorRaw = document.getElementById('inp-valor').value.replace(/\./g, '').trim();
   const prov     = document.getElementById('inp-proveedor').value.trim();
   const factura  = document.getElementById('inp-factura').value.trim();
@@ -349,6 +389,7 @@ async function agregarMovimientoUI() {
     const mov = await agregarMovimiento(empresaCodigo, userActual.uid, {
       fecha: fechaDisplay, categoria: cat,
       subcategoria: sub === '' ? '' : sub,
+      cuenta: cuenta,
       valor: valorRaw, proveedor: prov, factura
     });
     toast('Movimiento guardado.');
@@ -372,9 +413,10 @@ function limpiarFormulario() {
   document.getElementById('inp-valor').value     = '';
   document.getElementById('inp-proveedor').value = '';
   document.getElementById('inp-factura').value   = '';
-  // Resetear subcategoría al valor vacío
   const selSub = document.getElementById('inp-subcategoria');
   if (selSub) selSub.value = '';
+  const selCuenta = document.getElementById('inp-cuenta');
+  if (selCuenta) selCuenta.value = CUENTA_DEFAULT;
   document.getElementById('inp-categoria').focus();
 }
 
@@ -452,6 +494,7 @@ function renderPagina() {
     const prov    = m.proveedor ? toSentenceCase(m.proveedor) : '<span style="color:var(--text-3)">—</span>';
     const factura = m.factura   || '<span style="color:var(--text-3)">—</span>';
     const subcat  = m.subcategoria ? `<span style="font-size:11px;color:var(--text-3)">${toSentenceCase(m.subcategoria)}</span>` : '';
+    const cuenta  = toSentenceCase(m.cuenta || 'EFECTIVO');
     return `<tr data-id="${m.id}" data-cat="${cat}" data-valor="${m.valor}">
       <td>${m.fecha}</td>
       <td>
@@ -459,10 +502,11 @@ function renderPagina() {
         ${subcat}
       </td>
       <td>${prov}</td>
+      <td><span class="cuenta-tag">${cuenta}</span></td>
       <td style="font-family:var(--font-mono);font-size:12px">${factura}</td>
       <td class="amount ${cat}">${formatCOP(m.valor)}</td>
       <td style="width:56px;text-align:center;display:flex;gap:4px;justify-content:center">
-        <button class="btn-edit" title="Editar"  onclick="window.__editMov('${m.id}')">&#9998;</button>
+        <button class="btn-edit" title="Editar"   onclick="window.__editMov('${m.id}')">&#9998;</button>
         <button class="btn-del"  title="Eliminar" onclick="window.__delMov('${m.id}')">&#x2715;</button>
       </td>
     </tr>`;
@@ -474,7 +518,7 @@ function renderPagina() {
         <thead>
           <tr>
             <th>Fecha</th><th>Categoría</th><th>Proveedor</th>
-            <th>N° Factura</th><th style="text-align:right">Valor</th><th></th>
+            <th>Cuenta</th><th>N° Factura</th><th style="text-align:right">Valor</th><th></th>
           </tr>
         </thead>
         <tbody>${filas}</tbody>
@@ -511,7 +555,12 @@ function abrirModalEdicion(movId) {
     `<option value="${c}" ${c.toUpperCase() === mov.categoria ? 'selected' : ''}>${c}</option>`
   ).join('');
 
-  // Construir opciones de subcategoría
+  // Construir opciones de cuenta
+  const cuentas   = getCuentas();
+  const cuentaAct = toSentenceCase(mov.cuenta || 'EFECTIVO');
+  const opsCuenta =
+    cuentas.map(c => `<option value="${c}" ${c === cuentaAct ? 'selected' : ''}>${c}</option>`).join('') +
+    '<option value="__nueva_cuenta__">+ Nueva cuenta...</option>';
   const catActual = toSentenceCase(mov.categoria);
   const subs      = getSubcategorias(catActual);
   const opsSub =
@@ -542,6 +591,10 @@ function abrirModalEdicion(movId) {
         <div class="field">
           <label>Valor</label>
           <input type="text" id="edit-valor" value="${(mov.valor || 0).toLocaleString('es-CO')}" inputmode="numeric" />
+        </div>
+        <div class="field">
+          <label>Cuenta</label>
+          <select id="edit-cuenta">${opsCuenta}</select>
         </div>
         <div class="field">
           <label>Proveedor</label>
@@ -601,6 +654,7 @@ function abrirModalEdicion(movId) {
         fecha:        fechaDisplay,
         categoria:    selCat.value,
         subcategoria: subVal,
+        cuenta:       backdrop.querySelector('#edit-cuenta')?.value || CUENTA_DEFAULT,
         valor:        valorRaw,
         proveedor:    backdrop.querySelector('#edit-prov').value.trim(),
         factura:      backdrop.querySelector('#edit-fact').value.trim(),
@@ -710,6 +764,7 @@ function mostrarSelectorEmpresa(empresas, user) {
       setEmpresaActual(btn.dataset.codigo);
       empresaCodigo = btn.dataset.codigo;
       await cargarSubcategorias(empresaCodigo);
+      await cargarCuentas(empresaCodigo);
       screen.classList.add('hidden');
       await iniciarApp();
     });
@@ -722,6 +777,7 @@ function mostrarSelectorEmpresa(empresas, user) {
       const empresa = await unirseAEmpresa(codigo, user.uid, user.email, user.displayName || '');
       if (!empresa) { hideLoader(); return; }
       await cargarSubcategorias(empresa.codigo);
+      await cargarCuentas(empresa.codigo);
       empresaCodigo = empresa.codigo;
       screen.classList.add('hidden');
       await iniciarApp();
@@ -752,6 +808,7 @@ function mostrarFlujoEmpresa(user) {
       if (!empresa) { hideLoader(); return; }
       empresaCodigo = empresa.codigo;
       await cargarSubcategorias(empresa.codigo);
+      await cargarCuentas(empresa.codigo);
       screen.classList.add('hidden');
       await iniciarApp();
     } catch (err) {
