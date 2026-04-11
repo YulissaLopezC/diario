@@ -356,19 +356,43 @@ async function exportarLibroFiscal(empresaCodigo) {
     return toISO(a).localeCompare(toISO(b));
   });
 
+  let totV = 0, totC = 0, totG = 0;
+  diasOrdenados.forEach(fecha => {
+    totV += agrupado[fecha].venta;
+    totC += agrupado[fecha].compra;
+    totG += agrupado[fecha].gasto;
+  });
+
   const bom = '\uFEFF';
-  const cabecera = ['Fecha','Ventas','Compras','Gastos','Balance'];
-  const filas = diasOrdenados.map(fecha => {
+
+  // Cabecera
+  const lineas = ['Fecha;Ventas;Compras;Gastos;Balance'];
+
+  // Filas por día
+  diasOrdenados.forEach(fecha => {
     const { venta, compra, gasto } = agrupado[fecha];
-    return [fecha, venta, compra, gasto, venta - compra - gasto];
+    const balance = venta - compra - gasto;
+    lineas.push([
+      fecha,
+      venta   > 0 ? venta   : 0,
+      compra  > 0 ? compra  : 0,
+      gasto   > 0 ? gasto   : 0,
+      balance
+    ].join(';'));
   });
 
   // Fila de totales
-  let totV = 0, totC = 0, totG = 0;
-  filas.forEach(([, v, c, g]) => { totV += v; totC += c; totG += g; });
-  filas.push(['TOTAL', totV, totC, totG, totV - totC - totG]);
+  lineas.push(['TOTAL', totV, totC, totG, totV - totC - totG].join(';'));
 
-  const csv = bom + [cabecera, ...filas].map(row => row.join(';')).join('\n');
+  // Línea en blanco + resumen
+  lineas.push('');
+  lineas.push(`Período;${isoADisplay(desde)} al ${isoADisplay(hasta)}`);
+  lineas.push(`Total ventas;${totV}`);
+  lineas.push(`Total compras;${totC}`);
+  lineas.push(`Total gastos;${totG}`);
+  lineas.push(`Balance neto;${totV - totC - totG}`);
+
+  const csv = bom + lineas.join('\n');
   descargar(csv, 'text/csv;charset=utf-8', nombreArchivo('libro_fiscal.csv'));
 }
 
