@@ -113,6 +113,17 @@ export async function eliminarMovimiento(empresaCodigo, movId) {
   await deleteDoc(ref);
 }
 
+// ── Obtener lista de proveedores únicos de la empresa ──────
+export async function getProveedores(empresaCodigo) {
+  const snap = await getDocs(refMovimientos(empresaCodigo));
+  const set  = new Set();
+  snap.docs.forEach(d => {
+    const p = d.data().proveedor;
+    if (p && p.trim()) set.add(p.trim().toUpperCase());
+  });
+  return [...set].sort();
+}
+
 // ── Leer todos los movimientos (para dashboard anual) ──────
 export async function getTodosMovimientos(empresaCodigo) {
   const snap = await getDocs(refMovimientos(empresaCodigo));

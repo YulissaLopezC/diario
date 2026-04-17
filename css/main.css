@@ -886,6 +886,36 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   border: 1px solid var(--border);
 }
 
+/* ── Autocompletado proveedor ── */
+.autocomplete-wrap {
+  position: relative;
+  width: 100%;
+}
+.autocomplete-list {
+  position: absolute;
+  top: calc(100% + 3px);
+  left: 0; right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  z-index: 50;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.autocomplete-item {
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text);
+  transition: background var(--transition);
+}
+.autocomplete-item:hover,
+.autocomplete-item.selected {
+  background: var(--green-light);
+  color: var(--green-dark);
+}
+
 /* ── Selector de empresa ── */
 .btn-empresa-sel {
   width: 100%;

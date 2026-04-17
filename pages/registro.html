@@ -43,7 +43,10 @@
     </div>
     <div class="field">
       <label for="inp-proveedor">Proveedor <span style="color:var(--text-3);font-weight:400">(opcional)</span></label>
-      <input type="text" id="inp-proveedor" placeholder="Nombre comercial" />
+      <div class="autocomplete-wrap">
+        <input type="text" id="inp-proveedor" placeholder="Nombre comercial" autocomplete="off" />
+        <div class="autocomplete-list" id="prov-lista" style="display:none"></div>
+      </div>
     </div>
     <div class="field">
       <label for="inp-cuenta">Cuenta</label>

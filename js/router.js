@@ -5,7 +5,7 @@ import { initAuth, loginConGoogle, logout, getInitials } from './auth.js';
 import { cargarEmpresasDelUsuario, crearEmpresa, unirseAEmpresa, empresaActual, misEmpresas, setEmpresaActual, exposeAdminTools } from './empresa.js';
 import { cargarSubcategorias, getSubcategorias, agregarSubcategoria } from './subcategorias.js';
 import { cargarCuentas, getCuentas, agregarCuenta, CUENTA_DEFAULT } from './cuentas.js';
-import { agregarMovimiento, getMovimientosMes, getMesesConDatos, eliminarMovimiento, editarMovimiento, getMovimientosDia } from './movimientos.js';
+import { agregarMovimiento, getMovimientosMes, getMesesConDatos, eliminarMovimiento, editarMovimiento, getMovimientosDia, getProveedores } from './movimientos.js';
 import { renderDashboard } from './dashboard.js';
 import { initInformes } from './informes.js';
 import {
@@ -251,6 +251,70 @@ async function actualizarBannerDia() {
   banner.style.display = 'flex';
 }
 
+// ── Cache de proveedores para autocompletado ───────────────
+let proveedoresCache = [];
+
+function initAutocompletado() {
+  const inp   = document.getElementById('inp-proveedor');
+  const lista = document.getElementById('prov-lista');
+  if (!inp || !lista) return;
+
+  let idxSeleccionado = -1;
+
+  inp.addEventListener('input', () => {
+    const query = inp.value.trim().toUpperCase();
+    if (!query) { lista.style.display = 'none'; return; }
+
+    const coincidencias = proveedoresCache.filter(p => p.includes(query)).slice(0, 8);
+    if (!coincidencias.length) { lista.style.display = 'none'; return; }
+
+    idxSeleccionado = -1;
+    lista.innerHTML = coincidencias
+      .map((p, i) => `<div class="autocomplete-item" data-idx="${i}">${toSentenceCase(p)}</div>`)
+      .join('');
+    lista.style.display = 'block';
+
+    lista.querySelectorAll('.autocomplete-item').forEach(item => {
+      item.addEventListener('mousedown', e => {
+        e.preventDefault();
+        inp.value = item.textContent;
+        lista.style.display = 'none';
+      });
+    });
+  });
+
+  // Navegación con teclado
+  inp.addEventListener('keydown', e => {
+    const items = lista.querySelectorAll('.autocomplete-item');
+    if (!items.length || lista.style.display === 'none') return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      idxSeleccionado = Math.min(idxSeleccionado + 1, items.length - 1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      idxSeleccionado = Math.max(idxSeleccionado - 1, -1);
+    } else if (e.key === 'Enter' && idxSeleccionado >= 0) {
+      e.preventDefault();
+      inp.value = items[idxSeleccionado].textContent;
+      lista.style.display = 'none';
+      idxSeleccionado = -1;
+      return;
+    } else if (e.key === 'Escape') {
+      lista.style.display = 'none';
+      return;
+    }
+
+    items.forEach((item, i) => item.classList.toggle('selected', i === idxSeleccionado));
+    if (idxSeleccionado >= 0) items[idxSeleccionado].scrollIntoView({ block: 'nearest' });
+  });
+
+  // Cerrar al perder foco
+  inp.addEventListener('blur', () => {
+    setTimeout(() => { lista.style.display = 'none'; }, 150);
+  });
+}
+
 // ── Pantalla de Registro ───────────────────────────────────
 async function initRegistro() {
   const inpFecha = document.getElementById('inp-fecha');
@@ -263,6 +327,12 @@ async function initRegistro() {
   const selCat     = reemplazar('inp-categoria');
   const selSub     = reemplazar('inp-subcategoria');
   const selCuenta  = reemplazar('inp-cuenta');
+
+  // Cargar proveedores para autocompletado (en paralelo con el resto)
+  getProveedores(empresaCodigo).then(lista => {
+    proveedoresCache = lista;
+    initAutocompletado();
+  });
 
   // Llenar select de cuentas
   actualizarSelectCuentas(selCuenta);
@@ -393,6 +463,16 @@ async function agregarMovimientoUI() {
       valor: valorRaw, proveedor: prov, factura
     });
     toast('Movimiento guardado.');
+
+    // Actualizar cache de proveedores si se ingresó uno nuevo
+    if (prov) {
+      const provUp = prov.toUpperCase();
+      if (!proveedoresCache.includes(provUp)) {
+        proveedoresCache.push(provUp);
+        proveedoresCache.sort();
+      }
+    }
+
     limpiarFormulario();
     const claveReg   = `${anio}-${mes}`;
     const claveVista = mesesConDatos[mesSelIdx];
