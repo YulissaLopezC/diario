@@ -1,15 +1,36 @@
 // js/informes.js
-// Informes con rango de fechas libre, filtro subcategoría y libro fiscal
+// Informes con rango de fechas libre, filtro subcategoría, libro fiscal y columna Tipo
 
 import { getMovimientosRango } from './movimientos.js';
 import { formatCOP, toSentenceCase, hoyISO, isoADisplay, toast } from './ui.js';
 import { empresaActual } from './empresa.js';
 import { getSubcategorias } from './subcategorias.js';
 
+// ── Tipo según categoría ───────────────────────────────────
+function getTipo(categoria) {
+  const cat = (categoria || '').toUpperCase();
+  if (cat === 'VENTA')      return 'Entrada';
+  if (cat === 'GASTO')      return 'Salida';
+  if (cat === 'COMPRA')     return 'Salida';
+  if (cat === 'MOVIMIENTO') return 'Neutro';
+  return 'Sin clasificar';
+}
+
+function getTipoColor(tipo) {
+  if (tipo === 'Entrada') return 'var(--green)';
+  if (tipo === 'Salida')  return 'var(--red)';
+  return 'var(--text-3)';
+}
+
+function getTipoBadgeClass(tipo) {
+  if (tipo === 'Entrada') return 'tipo-entrada';
+  if (tipo === 'Salida')  return 'tipo-salida';
+  return 'tipo-neutro';
+}
+
 // ── Inicializar pantalla ───────────────────────────────────
 export async function initInformes(empresaCodigo) {
-  const hoy  = hoyISO();
-  // Por defecto: primer día del mes actual hasta hoy
+  const hoy       = hoyISO();
   const primerDia = hoy.slice(0, 7) + '-01';
 
   const elDesde = document.getElementById('inf-fecha-desde');
@@ -21,7 +42,7 @@ export async function initInformes(empresaCodigo) {
   bindEventos(empresaCodigo);
 }
 
-// ── Sincronizar subcategorías con la categoría seleccionada ─
+// ── Subcategorías según categoría seleccionada ─────────────
 function bindFiltroSubcat() {
   const selCat = document.getElementById('inf-cat');
   const selSub = document.getElementById('inf-subcat');
@@ -39,9 +60,8 @@ function bindFiltroSubcat() {
   });
 }
 
-// ── Bind eventos botones ───────────────────────────────────
+// ── Bind eventos ───────────────────────────────────────────
 function bindEventos(empresaCodigo) {
-  // Limpiar listeners previos
   ['inf-btn-previa','inf-btn-csv','inf-btn-excel','inf-btn-libro-previa','inf-btn-libro-excel'].forEach(id => {
     const btn = document.getElementById(id);
     if (!btn) return;
@@ -56,25 +76,21 @@ function bindEventos(empresaCodigo) {
   document.getElementById('inf-btn-libro-excel')?.addEventListener('click',  () => exportarLibroFiscal(empresaCodigo));
 }
 
-// ── Obtener filtros actuales ───────────────────────────────
+// ── Filtros actuales ───────────────────────────────────────
 function getFiltros() {
   return {
-    desde:    document.getElementById('inf-fecha-desde')?.value || '',
-    hasta:    document.getElementById('inf-fecha-hasta')?.value || '',
+    desde:     document.getElementById('inf-fecha-desde')?.value || '',
+    hasta:     document.getElementById('inf-fecha-hasta')?.value || '',
     categoria: document.getElementById('inf-cat')?.value || 'todas',
-    subcat:   document.getElementById('inf-subcat')?.value || 'todas',
+    subcat:    document.getElementById('inf-subcat')?.value || 'todas',
   };
 }
 
-// ── Convertir fechas ISO a claves de mes para la query ─────
 function fechasAClaves(desde, hasta) {
-  // claveMes formato "YYYY-MM"
-  const claveDesde = desde.slice(0, 7);
-  const claveHasta = hasta.slice(0, 7);
-  return { claveDesde, claveHasta };
+  return { claveDesde: desde.slice(0, 7), claveHasta: hasta.slice(0, 7) };
 }
 
-// ── Filtrar movimientos por rango y filtros ────────────────
+// ── Filtrar movimientos ────────────────────────────────────
 async function getMovsFiltrados(empresaCodigo) {
   const { desde, hasta, categoria, subcat } = getFiltros();
   if (!desde || !hasta) return [];
@@ -82,12 +98,12 @@ async function getMovsFiltrados(empresaCodigo) {
   const { claveDesde, claveHasta } = fechasAClaves(desde, hasta);
   let movs = await getMovimientosRango(empresaCodigo, claveDesde, claveHasta);
 
-  // Filtrar por rango de fechas exacto (día a día)
+  // Filtro por rango exacto de días
   movs = movs.filter(m => {
     const parts = m.fecha.split('/');
     if (parts.length !== 3) return false;
-    const fechaISO = `${parts[2]}-${parts[1]}-${parts[0]}`;
-    return fechaISO >= desde && fechaISO <= hasta;
+    const iso = `${parts[2]}-${parts[1]}-${parts[0]}`;
+    return iso >= desde && iso <= hasta;
   });
 
   if (categoria !== 'todas') {
@@ -101,6 +117,16 @@ async function getMovsFiltrados(empresaCodigo) {
 
 // ── Actualizar métricas resumen ────────────────────────────
 function actualizarMetricas(movs) {
+  let entradas = 0, salidas = 0;
+  movs.forEach(m => {
+    const tipo = getTipo(m.categoria);
+    if (tipo === 'Entrada') entradas += m.valor;
+    if (tipo === 'Salida')  salidas  += m.valor;
+  });
+  const balance  = entradas - salidas;
+  const balColor = balance >= 0 ? 'var(--green)' : 'var(--red)';
+
+  // Totales por categoría para las cards
   let v = 0, g = 0, c = 0;
   movs.forEach(m => {
     const cat = (m.categoria || '').toLowerCase();
@@ -108,13 +134,11 @@ function actualizarMetricas(movs) {
     if (cat === 'gasto')  g += m.valor;
     if (cat === 'compra') c += m.valor;
   });
-  const balance  = v - g - c;
-  const balColor = balance >= 0 ? 'var(--green)' : 'var(--red)';
 
   const set = (id, val, color) => {
     const el = document.getElementById(id);
     if (!el) return;
-    el.textContent  = val;
+    el.textContent = val;
     if (color) el.style.color = color;
   };
 
@@ -123,7 +147,6 @@ function actualizarMetricas(movs) {
   set('inf-total-gastos',  formatCOP(g), 'var(--red)');
   set('inf-balance',       formatCOP(balance), balColor);
 
-  // Badge período
   const { desde, hasta } = getFiltros();
   const badge = document.getElementById('inf-periodo-badge');
   if (badge && desde && hasta) {
@@ -136,9 +159,8 @@ function actualizarMetricas(movs) {
 // ── Vista previa general ───────────────────────────────────
 async function cargarVistaGeneral(empresaCodigo) {
   const { desde, hasta } = getFiltros();
-  if (!desde || !hasta) {
-    toast('Selecciona un rango de fechas.', 'error'); return;
-  }
+  if (!desde || !hasta) { toast('Selecciona un rango de fechas.', 'error'); return; }
+
   const movs = await getMovsFiltrados(empresaCodigo);
   actualizarMetricas(movs);
 
@@ -153,65 +175,74 @@ async function cargarVistaGeneral(empresaCodigo) {
     return;
   }
 
-  let totalDebito = 0, totalCredito = 0;
-  const filas = movs.map(m => {
-    const esCreditoCat = m.categoria === 'VENTA';
-    const valor = m.valor || 0;
-    if (esCreditoCat) totalCredito += valor;
-    else              totalDebito  += valor;
+  let totalEntradas = 0, totalSalidas = 0;
 
-    const debito  = esCreditoCat ? '—' : `<span class="amount gasto">${formatCOP(valor)}</span>`;
-    const credito = esCreditoCat ? `<span class="amount venta">${formatCOP(valor)}</span>` : '—';
+  const filas = movs.map(m => {
+    const tipo    = getTipo(m.categoria);
+    const color   = getTipoColor(tipo);
+    const badgeCls = getTipoBadgeClass(tipo);
+    const valor   = m.valor || 0;
+    if (tipo === 'Entrada') totalEntradas += valor;
+    if (tipo === 'Salida')  totalSalidas  += valor;
+
+    const cat    = (m.categoria || '').toLowerCase();
+    const subcat = m.subcategoria ? toSentenceCase(m.subcategoria) : '<span style="color:var(--text-3)">—</span>';
+    const prov   = m.proveedor ? toSentenceCase(m.proveedor) : '<span style="color:var(--text-3)">—</span>';
+    const fact   = m.factura || '<span style="color:var(--text-3)">—</span>';
 
     return `<tr>
       <td>${m.fecha}</td>
-      <td><span class="badge badge-${m.categoria.toLowerCase()}">${toSentenceCase(m.categoria)}</span></td>
-      <td>${m.subcategoria ? toSentenceCase(m.subcategoria) : '<span style="color:var(--text-3)">—</span>'}</td>
-      <td>${m.proveedor ? toSentenceCase(m.proveedor) : '<span style="color:var(--text-3)">—</span>'}</td>
+      <td><span class="inf-tipo-badge ${badgeCls}">${tipo}</span></td>
+      <td><span class="badge badge-${cat}">${toSentenceCase(m.categoria)}</span></td>
+      <td>${subcat}</td>
+      <td>${prov}</td>
       <td><span class="cuenta-tag">${toSentenceCase(m.cuenta || 'EFECTIVO')}</span></td>
-      <td style="font-family:var(--font-mono);font-size:12px">${m.factura || '—'}</td>
-      <td style="text-align:right">${debito}</td>
-      <td style="text-align:right">${credito}</td>
+      <td style="font-family:var(--font-mono);font-size:12px">${fact}</td>
+      <td class="amount" style="color:${color}">${formatCOP(valor)}</td>
     </tr>`;
   }).join('');
 
+  const balance  = totalEntradas - totalSalidas;
+  const balColor = balance >= 0 ? 'var(--green)' : 'var(--red)';
+
   el.innerHTML = `
+    <div class="inf-leyenda">
+      <span class="inf-ley-item"><span class="inf-dot dot-entrada"></span>Entrada — ingresa dinero</span>
+      <span class="inf-ley-item"><span class="inf-dot dot-salida"></span>Salida — egresa dinero</span>
+      <span class="inf-ley-item"><span class="inf-dot dot-neutro"></span>Neutro — transferencia interna</span>
+    </div>
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
-            <th>Fecha</th><th>Categoría</th><th>Subcategoría</th><th>Proveedor</th>
-            <th>Cuenta</th><th>N° Factura</th>
-            <th style="text-align:right">Débito</th>
-            <th style="text-align:right">Crédito</th>
+            <th>Fecha</th><th>Tipo</th><th>Categoría</th><th>Subcategoría</th>
+            <th>Proveedor</th><th>Cuenta</th><th>N° Factura</th>
+            <th style="text-align:right">Valor</th>
           </tr>
         </thead>
         <tbody>${filas}</tbody>
       </table>
-      <div class="table-footer" style="margin-top:10px">
-        <span style="color:var(--red)">Débito: ${formatCOP(totalDebito)}</span>
-        <span style="color:var(--green)">Crédito: ${formatCOP(totalCredito)}</span>
-      </div>
+    </div>
+    <div class="table-footer" style="margin-top:10px">
+      <span style="color:var(--green)">Entradas: ${formatCOP(totalEntradas)}</span>
+      <span style="color:var(--red)">Salidas: ${formatCOP(totalSalidas)}</span>
+      <span style="color:${balColor}">Balance: ${formatCOP(balance)}</span>
     </div>`;
 }
 
 // ── Libro Fiscal — agrupar por día ─────────────────────────
 async function cargarLibroFiscal(empresaCodigo) {
-  // El libro fiscal solo usa rango de fechas, ignora filtros de categoría
   const { desde, hasta } = getFiltros();
-  if (!desde || !hasta) {
-    toast('Selecciona un rango de fechas.', 'error'); return;
-  }
+  if (!desde || !hasta) { toast('Selecciona un rango de fechas.', 'error'); return; }
 
   const { claveDesde, claveHasta } = fechasAClaves(desde, hasta);
   let movs = await getMovimientosRango(empresaCodigo, claveDesde, claveHasta);
 
-  // Filtrar por rango exacto y excluir movimientos bancarios
   movs = movs.filter(m => {
     const parts = m.fecha.split('/');
     if (parts.length !== 3) return false;
-    const fechaISO = `${parts[2]}-${parts[1]}-${parts[0]}`;
-    return fechaISO >= desde && fechaISO <= hasta && m.categoria !== 'MOVIMIENTO';
+    const iso = `${parts[2]}-${parts[1]}-${parts[0]}`;
+    return iso >= desde && iso <= hasta && m.categoria !== 'MOVIMIENTO';
   });
 
   actualizarMetricas(movs);
@@ -229,30 +260,26 @@ async function cargarLibroFiscal(empresaCodigo) {
 
   const agrupado = agruparPorDia(movs);
   const diasOrdenados = Object.keys(agrupado).sort((a, b) => {
-    // Ordenar fechas DD/MM/YYYY
     const toISO = f => { const p = f.split('/'); return `${p[2]}-${p[1]}-${p[0]}`; };
     return toISO(a).localeCompare(toISO(b));
   });
 
-  let totVenta = 0, totCompra = 0, totGasto = 0;
+  let totV = 0, totC = 0, totG = 0;
 
   const filas = diasOrdenados.map(fecha => {
     const { venta, compra, gasto } = agrupado[fecha];
-    totVenta  += venta;
-    totCompra += compra;
-    totGasto  += gasto;
+    totV += venta; totC += compra; totG += gasto;
     const balance = venta - compra - gasto;
-
     return `<tr>
       <td><strong>${fecha}</strong></td>
-      <td class="amount venta">${venta  > 0 ? formatCOP(venta)  : '—'}</td>
-      <td class="amount compra">${compra > 0 ? formatCOP(compra) : '—'}</td>
-      <td class="amount gasto">${gasto  > 0 ? formatCOP(gasto)  : '—'}</td>
+      <td class="amount" style="color:var(--green)">${venta  > 0 ? formatCOP(venta)  : '—'}</td>
+      <td class="amount" style="color:var(--blue)">${compra > 0 ? formatCOP(compra) : '—'}</td>
+      <td class="amount" style="color:var(--red)">${gasto  > 0 ? formatCOP(gasto)  : '—'}</td>
       <td class="amount" style="color:${balance >= 0 ? 'var(--green)' : 'var(--red)'};font-weight:700">${formatCOP(balance)}</td>
     </tr>`;
   }).join('');
 
-  const balTotal = totVenta - totCompra - totGasto;
+  const balTotal = totV - totC - totG;
 
   el.innerHTML = `
     <div class="table-wrap">
@@ -260,31 +287,30 @@ async function cargarLibroFiscal(empresaCodigo) {
         <thead>
           <tr>
             <th>Fecha</th>
-            <th style="text-align:right">Ventas</th>
-            <th style="text-align:right">Compras</th>
-            <th style="text-align:right">Gastos</th>
+            <th style="text-align:right">Ventas (Entrada)</th>
+            <th style="text-align:right">Compras (Salida)</th>
+            <th style="text-align:right">Gastos (Salida)</th>
             <th style="text-align:right">Balance</th>
           </tr>
         </thead>
         <tbody>${filas}</tbody>
       </table>
-      <div class="table-footer" style="margin-top:10px">
-        <span style="color:var(--green)">Ventas: ${formatCOP(totVenta)}</span>
-        <span style="color:var(--blue)">Compras: ${formatCOP(totCompra)}</span>
-        <span style="color:var(--red)">Gastos: ${formatCOP(totGasto)}</span>
-        <span style="color:${balTotal >= 0 ? 'var(--green)' : 'var(--red)'}">Balance: ${formatCOP(balTotal)}</span>
-      </div>
+    </div>
+    <div class="table-footer" style="margin-top:10px">
+      <span style="color:var(--green)">Ventas: ${formatCOP(totV)}</span>
+      <span style="color:var(--blue)">Compras: ${formatCOP(totC)}</span>
+      <span style="color:var(--red)">Gastos: ${formatCOP(totG)}</span>
+      <span style="color:${balTotal >= 0 ? 'var(--green)' : 'var(--red)'}">Balance: ${formatCOP(balTotal)}</span>
     </div>`;
 }
 
 function agruparPorDia(movs) {
   return movs.reduce((acc, m) => {
-    const fecha = m.fecha;
-    if (!acc[fecha]) acc[fecha] = { venta: 0, compra: 0, gasto: 0 };
+    if (!acc[m.fecha]) acc[m.fecha] = { venta: 0, compra: 0, gasto: 0 };
     const cat = (m.categoria || '').toLowerCase();
-    if (cat === 'venta')  acc[fecha].venta  += m.valor;
-    if (cat === 'compra') acc[fecha].compra += m.valor;
-    if (cat === 'gasto')  acc[fecha].gasto  += m.valor;
+    if (cat === 'venta')  acc[m.fecha].venta  += m.valor;
+    if (cat === 'compra') acc[m.fecha].compra += m.valor;
+    if (cat === 'gasto')  acc[m.fecha].gasto  += m.valor;
     return acc;
   }, {});
 }
@@ -294,9 +320,10 @@ async function exportarCSV(empresaCodigo) {
   const movs = await getMovsFiltrados(empresaCodigo);
   if (!movs.length) { toast('No hay datos para exportar.', 'error'); return; }
 
-  const cabecera = ['Fecha','Categoria','Subcategoria','Cuenta','Valor','Proveedor','Factura'];
+  const cabecera = ['Fecha','Tipo','Categoria','Subcategoria','Cuenta','Valor','Proveedor','Factura'];
   const filas = movs.map(m => [
     m.fecha,
+    getTipo(m.categoria),
     toSentenceCase(m.categoria),
     toSentenceCase(m.subcategoria || ''),
     toSentenceCase(m.cuenta || 'EFECTIVO'),
@@ -318,9 +345,10 @@ async function exportarExcel(empresaCodigo) {
   if (!movs.length) { toast('No hay datos para exportar.', 'error'); return; }
 
   const bom = '\uFEFF';
-  const cabecera = ['Fecha','Categoria','Subcategoria','Cuenta','Valor','Proveedor','Factura'];
+  const cabecera = ['Fecha','Tipo','Categoria','Subcategoria','Cuenta','Valor','Proveedor','Factura'];
   const filas = movs.map(m => [
     m.fecha,
+    getTipo(m.categoria),
     toSentenceCase(m.categoria),
     toSentenceCase(m.subcategoria || ''),
     toSentenceCase(m.cuenta || 'EFECTIVO'),
@@ -344,8 +372,8 @@ async function exportarLibroFiscal(empresaCodigo) {
   movs = movs.filter(m => {
     const parts = m.fecha.split('/');
     if (parts.length !== 3) return false;
-    const fechaISO = `${parts[2]}-${parts[1]}-${parts[0]}`;
-    return fechaISO >= desde && fechaISO <= hasta && m.categoria !== 'MOVIMIENTO';
+    const iso = `${parts[2]}-${parts[1]}-${parts[0]}`;
+    return iso >= desde && iso <= hasta && m.categoria !== 'MOVIMIENTO';
   });
 
   if (!movs.length) { toast('No hay datos para exportar.', 'error'); return; }
@@ -357,42 +385,23 @@ async function exportarLibroFiscal(empresaCodigo) {
   });
 
   let totV = 0, totC = 0, totG = 0;
-  diasOrdenados.forEach(fecha => {
-    totV += agrupado[fecha].venta;
-    totC += agrupado[fecha].compra;
-    totG += agrupado[fecha].gasto;
-  });
+  const lineas = ['Fecha;Ventas (Entrada);Compras (Salida);Gastos (Salida);Balance'];
 
-  const bom = '\uFEFF';
-
-  // Cabecera
-  const lineas = ['Fecha;Ventas;Compras;Gastos;Balance'];
-
-  // Filas por día
   diasOrdenados.forEach(fecha => {
     const { venta, compra, gasto } = agrupado[fecha];
-    const balance = venta - compra - gasto;
-    lineas.push([
-      fecha,
-      venta   > 0 ? venta   : 0,
-      compra  > 0 ? compra  : 0,
-      gasto   > 0 ? gasto   : 0,
-      balance
-    ].join(';'));
+    totV += venta; totC += compra; totG += gasto;
+    lineas.push([fecha, venta, compra, gasto, venta - compra - gasto].join(';'));
   });
 
-  // Fila de totales
   lineas.push(['TOTAL', totV, totC, totG, totV - totC - totG].join(';'));
-
-  // Línea en blanco + resumen
   lineas.push('');
   lineas.push(`Período;${isoADisplay(desde)} al ${isoADisplay(hasta)}`);
-  lineas.push(`Total ventas;${totV}`);
-  lineas.push(`Total compras;${totC}`);
-  lineas.push(`Total gastos;${totG}`);
+  lineas.push(`Total entradas (ventas);${totV}`);
+  lineas.push(`Total salidas (compras);${totC}`);
+  lineas.push(`Total salidas (gastos);${totG}`);
   lineas.push(`Balance neto;${totV - totC - totG}`);
 
-  const csv = bom + lineas.join('\n');
+  const csv = '\uFEFF' + lineas.join('\n');
   descargar(csv, 'text/csv;charset=utf-8', nombreArchivo('libro_fiscal', 'csv'));
 }
 
