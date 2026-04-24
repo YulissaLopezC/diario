@@ -969,6 +969,44 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   padding-top: 4px;
 }
 
+/* ── Columna Tipo en informes ── */
+.inf-tipo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+}
+.inf-tipo-badge.tipo-entrada { background: var(--green-light); color: var(--green-dark); }
+.inf-tipo-badge.tipo-salida  { background: var(--red-light);   color: var(--red); }
+.inf-tipo-badge.tipo-neutro  { background: var(--surface-2);   color: var(--text-2); }
+
+.inf-leyenda {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.inf-ley-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-2);
+}
+.inf-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.dot-entrada { background: var(--green); }
+.dot-salida  { background: var(--red); }
+.dot-neutro  { background: var(--text-3); }
+
 /* ── Footer app ── */
 .app-footer {
   text-align: center;
