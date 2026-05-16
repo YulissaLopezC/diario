@@ -1,0 +1,271 @@
+<!-- pages/inventario.html -->
+
+<!-- Encabezado -->
+<div class="reg-page-head">
+  <div>
+    <h1 class="reg-page-title">Inventario</h1>
+    <p class="reg-page-sub">Controla el stock y los movimientos de tus productos.</p>
+  </div>
+  <button class="btn-primary" id="inv-btn-abrir-modal">+ Crear producto</button>
+</div>
+
+<!-- Card: Registrar movimiento -->
+<div class="card reg-entry-card">
+  <div class="reg-entry-title">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1D9E75" stroke-width="2.5">
+      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+    </svg>
+    Registrar movimiento
+  </div>
+
+  <div class="entry-form">
+    <div class="field">
+      <label for="inv-fecha">Fecha</label>
+      <input type="date" id="inv-fecha" />
+    </div>
+
+    <div class="field">
+      <label for="inv-producto">Producto</label>
+      <select id="inv-producto">
+        <option value="">— Selecciona —</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="inv-tipo">Tipo</label>
+      <select id="inv-tipo">
+        <option value="entrada">Entrada</option>
+        <option value="salida">Salida</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="inv-cantidad">Cantidad</label>
+      <input type="number" id="inv-cantidad" min="1" placeholder="0" inputmode="numeric" autocomplete="off" />
+    </div>
+
+    <div class="field">
+      <label for="inv-nota">Nota <span style="color:var(--text-3);font-weight:400">(opcional)</span></label>
+      <input type="text" id="inv-nota" placeholder="Observación" autocomplete="off" />
+    </div>
+
+    <div class="field">
+      <label>&nbsp;</label>
+      <button class="btn-registrar" id="inv-btn-registrar">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        Registrar
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Card: Movimientos del día -->
+<div class="card" id="inv-card-movimientos">
+
+  <!-- Encabezado (siempre visible, clickeable) -->
+  <div id="inv-movs-header" style="cursor:pointer;display:flex;align-items:center;gap:12px;user-select:none">
+    <div style="flex:1;min-width:0">
+      <div class="reg-mov-title" style="margin:0">Movimientos del día</div>
+      <div id="inv-movs-resumen" style="font-size:12px;color:var(--text-3);margin-top:3px">0 entradas · 0 salidas</div>
+    </div>
+    <span id="inv-movs-fecha-label" style="font-size:13px;color:var(--text-2);white-space:nowrap"></span>
+    <button id="inv-movs-toggle" class="btn-secondary"
+      style="height:28px;width:28px;padding:0;font-size:13px;flex-shrink:0;line-height:1"
+      aria-label="Expandir">▼</button>
+  </div>
+
+  <!-- Cuerpo colapsable -->
+  <div id="inv-movs-body" style="overflow:hidden;max-height:0;transition:max-height 0.3s ease">
+    <div style="padding-top:16px">
+
+      <!-- Fecha + filtros -->
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+        <input type="date" id="inv-movs-fecha" style="height:32px;font-size:13px" />
+        <div style="display:flex;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden">
+          <button class="inv-filtro-btn" data-filtro="todos"
+            style="height:32px;padding:0 12px;font-size:12px;border:none;border-radius:0;background:transparent;cursor:pointer">Todos</button>
+          <button class="inv-filtro-btn" data-filtro="entrada"
+            style="height:32px;padding:0 12px;font-size:12px;border:none;border-left:1px solid var(--border);border-radius:0;background:transparent;cursor:pointer">Entradas</button>
+          <button class="inv-filtro-btn" data-filtro="salida"
+            style="height:32px;padding:0 12px;font-size:12px;border:none;border-left:1px solid var(--border);border-radius:0;background:transparent;cursor:pointer">Salidas</button>
+        </div>
+      </div>
+
+      <!-- Tabla -->
+      <div class="table-wrap" style="max-height:320px;overflow-y:auto">
+        <table id="inv-tabla-movimientos">
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>Tipo</th>
+              <th style="text-align:right">Cantidad</th>
+              <th>Nota</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="inv-tbody-movimientos">
+            <tr>
+              <td colspan="5" style="text-align:center;color:var(--text-3);padding:20px 0;font-size:12px">
+                Sin movimientos para esta fecha.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Paginación -->
+      <div id="inv-paginador-movs" style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:var(--text-2)"></div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Card: Inventario actual -->
+<div class="card">
+
+  <!-- Encabezado -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+    <div class="reg-mov-title" style="margin:0">Inventario actual</div>
+    <button class="btn-secondary" id="inv-btn-exportar-csv" style="height:32px;padding:0 14px;font-size:12px">
+      ⬇ Exportar
+    </button>
+  </div>
+
+  <!-- Búsqueda -->
+  <div style="margin-bottom:12px">
+    <input type="text" id="inv-stock-busqueda" placeholder="🔍 Buscar producto..."
+      autocomplete="off" style="width:100%;box-sizing:border-box" />
+  </div>
+
+  <!-- Tabs de estado -->
+  <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:16px;overflow-x:auto">
+    <button class="inv-stock-tab" data-stock-tab="todos"
+      style="height:34px;padding:0 14px;font-size:12px;border:none;background:transparent;cursor:pointer;white-space:nowrap;flex-shrink:0;border-bottom:2px solid transparent">
+      Todos <span class="tab-count">(0)</span></button>
+    <button class="inv-stock-tab" data-stock-tab="ok"
+      style="height:34px;padding:0 14px;font-size:12px;border:none;background:transparent;cursor:pointer;white-space:nowrap;flex-shrink:0;border-bottom:2px solid transparent">
+      ✅ OK <span class="tab-count">(0)</span></button>
+    <button class="inv-stock-tab" data-stock-tab="bajo"
+      style="height:34px;padding:0 14px;font-size:12px;border:none;background:transparent;cursor:pointer;white-space:nowrap;flex-shrink:0;border-bottom:2px solid transparent">
+      ⚠️ Stock bajo <span class="tab-count">(0)</span></button>
+    <button class="inv-stock-tab" data-stock-tab="agotado"
+      style="height:34px;padding:0 14px;font-size:12px;border:none;background:transparent;cursor:pointer;white-space:nowrap;flex-shrink:0;border-bottom:2px solid transparent">
+      🔴 Agotados <span class="tab-count">(0)</span></button>
+  </div>
+
+  <!-- Tabla -->
+  <div class="table-wrap">
+    <table id="inv-tabla-stock">
+      <thead>
+        <tr>
+          <th>Producto</th>
+          <th>Unidad</th>
+          <th style="text-align:right">Stock</th>
+          <th style="text-align:right">Mínimo</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="inv-tbody-stock">
+        <tr>
+          <td colspan="6" style="text-align:center;color:var(--text-3);padding:20px 0;font-size:12px">
+            Sin productos registrados.
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Paginación -->
+  <div id="inv-paginador-stock" style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:var(--text-2)"></div>
+
+</div>
+
+<!-- Modal: Crear producto / Carga masiva -->
+<div class="modal-backdrop" id="inv-modal-backdrop" style="display:none">
+  <div class="modal" style="max-width:480px;width:100%">
+
+    <!-- Vista: Formulario -->
+    <div id="inv-modal-vista-form">
+      <h3>Crear producto</h3>
+
+      <div style="display:flex;flex-direction:column;gap:12px;margin-top:16px">
+        <div class="field">
+          <label for="inv-prod-nombre">Nombre</label>
+          <input type="text" id="inv-prod-nombre" placeholder="Ej: Ron de Caldas" autocomplete="off" />
+        </div>
+
+        <div class="field">
+          <label for="inv-prod-unidad">Unidad</label>
+          <div class="autocomplete-wrap">
+            <input type="text" id="inv-prod-unidad" placeholder="Ej: Botella" autocomplete="off" />
+            <div class="autocomplete-list" id="inv-prod-unidad-lista" style="display:none"></div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="inv-prod-stock">Stock inicial</label>
+          <input type="number" id="inv-prod-stock" min="0" value="0" inputmode="numeric" autocomplete="off" />
+        </div>
+
+        <div class="field">
+          <label for="inv-prod-stock-min">
+            Stock mínimo
+            <span style="color:var(--text-3);font-weight:400">(opcional)</span>
+          </label>
+          <input type="number" id="inv-prod-stock-min" min="0" placeholder="Alerta si baja de este valor" inputmode="numeric" autocomplete="off" />
+        </div>
+      </div>
+
+      <div style="margin-top:16px;text-align:center">
+        <a id="inv-link-csv" style="font-size:13px;color:var(--green);cursor:pointer;text-decoration:underline">
+          ¿Tienes varios productos? Carga masiva →
+        </a>
+      </div>
+
+      <div class="modal-btns">
+        <button class="btn-secondary" id="inv-modal-cancelar-form">Cancelar</button>
+        <button class="btn-primary" id="inv-btn-crear-producto">+ Crear producto</button>
+      </div>
+    </div>
+
+    <!-- Vista: Carga masiva -->
+    <div id="inv-modal-vista-csv" style="display:none">
+      <h3>Carga masiva de productos</h3>
+
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:16px;margin-bottom:12px">
+        <button class="btn-secondary" id="inv-btn-descargar-plantilla">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Descargar plantilla CSV
+        </button>
+
+        <label class="btn-secondary" style="cursor:pointer" for="inv-input-csv">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          Seleccionar archivo .csv
+          <input type="file" id="inv-input-csv" accept=".csv" style="display:none" />
+        </label>
+      </div>
+
+      <p id="inv-nombre-archivo" style="font-size:12px;color:var(--text-3);margin-bottom:12px;display:none"></p>
+      <div id="inv-csv-preview"></div>
+
+      <div style="margin-top:14px">
+        <button class="btn-secondary" id="inv-btn-volver-form" style="font-size:12px">← Volver al formulario</button>
+      </div>
+
+      <div class="modal-btns">
+        <button class="btn-secondary" id="inv-modal-cancelar-csv">Cancelar</button>
+        <button class="btn-primary" id="inv-btn-cargar-csv" style="display:none">Confirmar carga</button>
+      </div>
+    </div>
+
+  </div>
+</div>

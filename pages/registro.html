@@ -86,6 +86,29 @@
     </div>
   </div>
 
+  <!-- Filtros de tabla -->
+  <div id="reg-filtros" style="display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <span style="font-size:11px;color:var(--text-3)">Desde</span>
+      <input type="date" id="filtro-desde" style="height:32px;font-size:13px;max-width:140px" />
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <span style="font-size:11px;color:var(--text-3)">Hasta</span>
+      <input type="date" id="filtro-hasta" style="height:32px;font-size:13px;max-width:140px" />
+    </div>
+    <select id="filtro-proveedor" style="height:32px;font-size:13px;max-width:160px">
+      <option value="">Todos los proveedores</option>
+    </select>
+    <select id="filtro-categoria" style="height:32px;font-size:13px;max-width:160px">
+      <option value="">Todas las categorías</option>
+      <option value="VENTA">Venta</option>
+      <option value="GASTO">Gasto</option>
+      <option value="COMPRA">Compra</option>
+      <option value="MOVIMIENTO">Movimiento</option>
+    </select>
+    <button class="btn-secondary" id="filtro-limpiar" style="height:32px;padding:0 12px;font-size:12px">✕ Limpiar</button>
+  </div>
+
   <!-- Banner resumen del día -->
   <div id="reg-dia-banner" class="reg-dia-banner" style="display:none">
     <div>

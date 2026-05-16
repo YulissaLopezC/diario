@@ -1,0 +1,1134 @@
+import { db } from './firebase.js';
+import {
+  doc, getDoc, setDoc, updateDoc, deleteDoc,
+  collection, addDoc, getDocs,
+  query, where, Timestamp, arrayUnion
+} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+// --- CONFIG ---
+
+export async function habilitarInventario(empresaCodigo) {
+  await setDoc(
+    doc(db, 'empresas', empresaCodigo, 'config', 'inventario'),
+    { habilitado: true },
+    { merge: true }
+  );
+}
+
+export async function deshabilitarInventario(empresaCodigo) {
+  await setDoc(
+    doc(db, 'empresas', empresaCodigo, 'config', 'inventario'),
+    { habilitado: false },
+    { merge: true }
+  );
+}
+
+export async function inventarioHabilitado(empresaCodigo) {
+  try {
+    const snap = await getDoc(doc(db, 'empresas', empresaCodigo, 'config', 'inventario'));
+    return snap.exists() && snap.data()?.habilitado === true;
+  } catch {
+    return false;
+  }
+}
+
+// --- UNIDADES ---
+
+const UNIDADES_GLOBALES = [
+  'Unidad','Kilogramo','Gramo','Libra','Litro','Mililitro',
+  'Botella','Caja','Bolsa','Paquete','Docena','Par','Metro','Rollo'
+];
+
+export async function cargarUnidades(empresaCodigo) {
+  const snap = await getDoc(doc(db, 'empresas', empresaCodigo, 'config', 'unidades'));
+  const custom = snap.exists() ? (snap.data().unidades || []) : [];
+  const customDisplay = custom.map(u => u.charAt(0).toUpperCase() + u.slice(1).toLowerCase());
+  return [...UNIDADES_GLOBALES, ...customDisplay];
+}
+
+export async function agregarUnidad(empresaCodigo, nombre) {
+  await setDoc(
+    doc(db, 'empresas', empresaCodigo, 'config', 'unidades'),
+    { unidades: arrayUnion(nombre.trim().toUpperCase()) },
+    { merge: true }
+  );
+}
+
+// --- PRODUCTOS ---
+
+export async function crearProducto(empresaCodigo, datos) {
+  const ref = await addDoc(
+    collection(db, 'empresas', empresaCodigo, 'productos'),
+    {
+      nombre:       datos.nombre.trim().toUpperCase(),
+      unidad:       datos.unidad.trim(),
+      stockInicial: datos.stockInicial ?? 0,
+      stockMinimo:  datos.stockMinimo ?? null,
+      activo:       true,
+      creadoEn:     Timestamp.now()
+    }
+  );
+  return ref.id;
+}
+
+export async function getProductos(empresaCodigo) {
+  const snap = await getDocs(
+    query(
+      collection(db, 'empresas', empresaCodigo, 'productos'),
+      where('activo', '==', true)
+    )
+  );
+  const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  return docs.sort((a, b) => a.nombre.localeCompare(b.nombre));
+}
+
+export async function desactivarProducto(empresaCodigo, productoId) {
+  await updateDoc(
+    doc(db, 'empresas', empresaCodigo, 'productos', productoId),
+    { activo: false }
+  );
+}
+
+// --- MOVIMIENTOS ---
+
+export async function registrarMovInventario(empresaCodigo, userId, datos) {
+  if (datos.tipo === 'salida') {
+    const snapMovs = await getDocs(
+      query(
+        collection(db, 'empresas', empresaCodigo, 'movInventario'),
+        where('productoId', '==', datos.productoId)
+      )
+    );
+    const productoSnap = await getDoc(
+      doc(db, 'empresas', empresaCodigo, 'productos', datos.productoId)
+    );
+    const stockInicial = productoSnap.exists() ? (productoSnap.data().stockInicial ?? 0) : 0;
+    const stockActual  = snapMovs.docs.reduce((acc, d) => {
+      const m = d.data();
+      return m.tipo === 'entrada' ? acc + m.cantidad : acc - m.cantidad;
+    }, stockInicial);
+
+    if (datos.cantidad > stockActual) {
+      throw new Error(`Stock insuficiente. Stock actual: ${stockActual} unidades`);
+    }
+  }
+
+  const ref = await addDoc(
+    collection(db, 'empresas', empresaCodigo, 'movInventario'),
+    {
+      fecha:          datos.fecha,
+      productoId:     datos.productoId,
+      productoNombre: datos.productoNombre,
+      tipo:           datos.tipo,
+      cantidad:       datos.cantidad,
+      nota:           datos.nota ?? '',
+      creadoEn:       Timestamp.now(),
+      creadoPor:      userId
+    }
+  );
+  return ref.id;
+}
+
+export async function getMovimientosInventario(empresaCodigo, fecha) {
+  const snap = await getDocs(
+    query(
+      collection(db, 'empresas', empresaCodigo, 'movInventario'),
+      where('fecha', '==', fecha)
+    )
+  );
+  const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  return docs.sort((a, b) => (a.creadoEn?.seconds || 0) - (b.creadoEn?.seconds || 0));
+}
+
+export async function eliminarMovInventario(empresaCodigo, movId) {
+  await deleteDoc(doc(db, 'empresas', empresaCodigo, 'movInventario', movId));
+}
+
+export async function getStockHistorico(empresaCodigo, productoId, fecha) {
+  const snap = await getDocs(
+    query(
+      collection(db, 'empresas', empresaCodigo, 'movInventario'),
+      where('productoId', '==', productoId)
+    )
+  );
+
+  const movimientos = snap.docs
+    .map(d => d.data())
+    .filter(m => m.fecha <= fecha)
+    .sort((a, b) => {
+      if (a.fecha !== b.fecha) return a.fecha.localeCompare(b.fecha);
+      return (a.creadoEn?.seconds || 0) - (b.creadoEn?.seconds || 0);
+    });
+
+  const productoSnap = await getDoc(doc(db, 'empresas', empresaCodigo, 'productos', productoId));
+  const stockInicial = productoSnap.exists() ? (productoSnap.data().stockInicial ?? 0) : 0;
+
+  return movimientos.reduce((stock, mov) => {
+    return mov.tipo === 'entrada' ? stock + mov.cantidad : stock - mov.cantidad;
+  }, stockInicial);
+}
+
+// ======================================================
+// UI — Lógica de pantalla
+// ======================================================
+
+import { toast, showConfirm, hoyISO, toSentenceCase } from './ui.js';
+
+const POR_PAGINA_MOVS  = 10;
+const POR_PAGINA_STOCK = 20;
+
+// Estado de módulo
+let _empresa          = '';
+let _userId           = '';
+let _productos        = [];
+let _movsDia          = [];
+let _movsDiaPag       = 0;
+let _movsDiaFiltro    = 'todos';
+let _movsDiaExpandido = false;
+let _datosStock       = [];
+let _unidades         = [];
+let _stockTab         = 'todos';
+let _stockBusqueda    = '';
+let _stockPag         = 0;
+
+// ── Inicialización principal ───────────────────────────
+export async function initInventario(empresaCodigo, userId) {
+  _empresa = empresaCodigo;
+  _userId  = userId;
+
+  const elFecha = document.getElementById('inv-fecha');
+  if (elFecha && !elFecha.value) elFecha.value = hoyISO();
+
+  const [unidades] = await Promise.all([
+    cargarUnidades(empresaCodigo),
+    _cargarProductos()
+  ]);
+  _unidades = unidades;
+
+  await Promise.all([initMovimientosDia(), initInventarioActual()]);
+
+  _bindEventos();
+}
+
+async function _cargarProductos() {
+  _productos = await getProductos(_empresa);
+  _llenarSelects();
+}
+
+function _llenarSelects() {
+  const opts = _productos.length
+    ? _productos.map(p => `<option value="${p.id}">${toSentenceCase(p.nombre)}</option>`).join('')
+    : '<option value="" disabled>Sin productos</option>';
+
+  ['inv-producto'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = `<option value="">— Selecciona —</option>${opts}`;
+    if (prev) sel.value = prev;
+  });
+}
+
+// ── Binding de eventos (cloneNode para limpiar listeners) ─
+function _bindEventos() {
+  ['inv-btn-registrar', 'inv-btn-abrir-modal']
+    .forEach(id => {
+      const btn = document.getElementById(id);
+      if (!btn) return;
+      const nuevo = btn.cloneNode(true);
+      btn.parentNode.replaceChild(nuevo, btn);
+    });
+
+  document.getElementById('inv-btn-registrar')
+    ?.addEventListener('click', _registrar);
+  document.getElementById('inv-btn-abrir-modal')
+    ?.addEventListener('click', abrirModalCrearProducto);
+
+  // Cerrar modal al clic fuera
+  document.getElementById('inv-modal-backdrop')
+    ?.addEventListener('click', e => {
+      if (e.target === document.getElementById('inv-modal-backdrop')) _cerrarModal();
+    });
+
+  // Autocomplete de unidades (los inputs viven en el modal del DOM)
+  _initAutocompleteUnidad();
+}
+
+// ── Modal: Crear producto ──────────────────────────────
+export function abrirModalCrearProducto() {
+  // Resetear formulario
+  const nombre = document.getElementById('inv-prod-nombre');
+  const unidad = document.getElementById('inv-prod-unidad');
+  const stock  = document.getElementById('inv-prod-stock');
+  const stockMin = document.getElementById('inv-prod-stock-min');
+  if (nombre)   nombre.value   = '';
+  if (unidad)   unidad.value   = '';
+  if (stock)    stock.value    = '0';
+  if (stockMin) stockMin.value = '';
+
+  // Resetear estado CSV
+  const inputCSV  = document.getElementById('inv-input-csv');
+  const nombreEl  = document.getElementById('inv-nombre-archivo');
+  const previewEl = document.getElementById('inv-csv-preview');
+  const btnCargar = document.getElementById('inv-btn-cargar-csv');
+  if (inputCSV)  inputCSV.value            = '';
+  if (nombreEl)  { nombreEl.textContent = ''; nombreEl.style.display = 'none'; }
+  if (previewEl) previewEl.innerHTML       = '';
+  if (btnCargar) btnCargar.style.display   = 'none';
+
+  // Mostrar vista formulario, ocultar vista CSV
+  document.getElementById('inv-modal-vista-form').style.display = '';
+  document.getElementById('inv-modal-vista-csv').style.display  = 'none';
+
+  // Mostrar modal y rebindear botones
+  document.getElementById('inv-modal-backdrop').style.display = '';
+  _bindModalBotones();
+
+  setTimeout(() => document.getElementById('inv-prod-nombre')?.focus(), 50);
+}
+
+function _cerrarModal() {
+  const backdrop = document.getElementById('inv-modal-backdrop');
+  if (backdrop) backdrop.style.display = 'none';
+}
+
+function _bindModalBotones() {
+  // CloneNode para limpiar listeners acumulados
+  [
+    'inv-modal-cancelar-form', 'inv-modal-cancelar-csv',
+    'inv-btn-crear-producto', 'inv-link-csv', 'inv-btn-volver-form',
+    'inv-btn-descargar-plantilla', 'inv-btn-cargar-csv'
+  ].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const nuevo = el.cloneNode(true);
+    el.parentNode.replaceChild(nuevo, el);
+  });
+
+  document.getElementById('inv-modal-cancelar-form')?.addEventListener('click', _cerrarModal);
+  document.getElementById('inv-modal-cancelar-csv')?.addEventListener('click', _cerrarModal);
+  document.getElementById('inv-btn-crear-producto')?.addEventListener('click', _crearProductoUI);
+
+  document.getElementById('inv-link-csv')?.addEventListener('click', () => {
+    document.getElementById('inv-modal-vista-form').style.display = 'none';
+    document.getElementById('inv-modal-vista-csv').style.display  = '';
+  });
+  document.getElementById('inv-btn-volver-form')?.addEventListener('click', () => {
+    document.getElementById('inv-modal-vista-form').style.display = '';
+    document.getElementById('inv-modal-vista-csv').style.display  = 'none';
+  });
+
+  document.getElementById('inv-btn-descargar-plantilla')?.addEventListener('click', _descargarPlantillaCSV);
+
+  // Input de archivo: mostrar nombre y botón Confirmar
+  const inputCSV = document.getElementById('inv-input-csv');
+  if (inputCSV) {
+    const nuevoInput = inputCSV.cloneNode(true);
+    inputCSV.parentNode.replaceChild(nuevoInput, inputCSV);
+    nuevoInput.addEventListener('change', () => {
+      const file = nuevoInput.files[0];
+      if (!file) return;
+      const nombreEl  = document.getElementById('inv-nombre-archivo');
+      const btnCargar = document.getElementById('inv-btn-cargar-csv');
+      if (nombreEl)  { nombreEl.textContent = file.name; nombreEl.style.display = ''; }
+      if (btnCargar) btnCargar.style.display = '';
+    });
+  }
+
+  document.getElementById('inv-btn-cargar-csv')?.addEventListener('click', () => {
+    const file = document.getElementById('inv-input-csv')?.files[0];
+    if (!file) { toast('Selecciona un archivo primero.', 'error'); return; }
+    _procesarArchivo(file);
+  });
+}
+
+// ── Registrar movimiento ───────────────────────────────
+async function _registrar() {
+  const fecha      = document.getElementById('inv-fecha')?.value;
+  const productoId = document.getElementById('inv-producto')?.value;
+  const tipo       = document.getElementById('inv-tipo')?.value;
+  const cantidadRaw = document.getElementById('inv-cantidad')?.value;
+  const nota       = document.getElementById('inv-nota')?.value?.trim() || '';
+
+  if (!fecha)      { toast('Ingresa una fecha.', 'error'); return; }
+  if (!productoId) { toast('Selecciona un producto.', 'error'); return; }
+  const cantidad = parseInt(cantidadRaw, 10);
+  if (!cantidad || cantidad <= 0) { toast('Ingresa una cantidad válida.', 'error'); return; }
+
+  const producto = _productos.find(p => p.id === productoId);
+  if (!producto) return;
+
+  try {
+    await registrarMovInventario(_empresa, _userId, {
+      fecha, productoId,
+      productoNombre: producto.nombre,
+      tipo, cantidad, nota
+    });
+    toast('Movimiento registrado.');
+    document.getElementById('inv-cantidad').value = '';
+    document.getElementById('inv-nota').value     = '';
+    await Promise.all([_recargarMovDia(), _recargarTablaStock()]);
+  } catch (err) {
+    toast(err.message || 'Error al registrar el movimiento.', 'error');
+  }
+}
+
+// ── Movimientos del día: init y helpers ───────────────
+async function initMovimientosDia() {
+  _movsDiaFiltro    = 'todos';
+  _movsDiaPag       = 0;
+  _movsDiaExpandido = false;
+
+  const fecha = hoyISO();
+
+  // Fecha input
+  const fechaEl = document.getElementById('inv-movs-fecha');
+  if (fechaEl) {
+    const nuevaFecha = fechaEl.cloneNode(true);
+    fechaEl.parentNode.replaceChild(nuevaFecha, fechaEl);
+    nuevaFecha.value = fecha;
+    nuevaFecha.addEventListener('change', async e => {
+      _movsDiaPag = 0;
+      _movsDiaFiltro = 'todos';
+      _actualizarFechaLabel(e.target.value);
+      _movsDia = await getMovimientosInventario(_empresa, e.target.value);
+      _actualizarResumen();
+      _actualizarFiltros();
+      renderTablaMovimientos();
+    });
+  }
+
+  _actualizarFechaLabel(fecha);
+  _setMovsColapsado(true);
+
+  // Header toggle (cloneNode limpia listeners acumulados)
+  const header = document.getElementById('inv-movs-header');
+  if (header) {
+    const nuevoHeader = header.cloneNode(true);
+    header.parentNode.replaceChild(nuevoHeader, header);
+    nuevoHeader.addEventListener('click', _toggleMovsDia);
+  }
+
+  // Filtros
+  document.querySelectorAll('.inv-filtro-btn').forEach(btn => {
+    const nuevo = btn.cloneNode(true);
+    btn.parentNode.replaceChild(nuevo, btn);
+    nuevo.addEventListener('click', e => {
+      e.stopPropagation();
+      _movsDiaFiltro = nuevo.dataset.filtro;
+      _movsDiaPag    = 0;
+      _actualizarFiltros();
+      renderTablaMovimientos();
+    });
+  });
+
+  _movsDia = await getMovimientosInventario(_empresa, fecha);
+  _actualizarResumen();
+  _actualizarFiltros();
+  renderTablaMovimientos();
+}
+
+function _setMovsColapsado(colapsar) {
+  _movsDiaExpandido = !colapsar;
+  const body   = document.getElementById('inv-movs-body');
+  const toggle = document.getElementById('inv-movs-toggle');
+  if (body)   body.style.maxHeight   = colapsar ? '0' : '700px';
+  if (toggle) {
+    toggle.textContent = colapsar ? '▼' : '▲';
+    toggle.setAttribute('aria-label', colapsar ? 'Expandir' : 'Colapsar');
+  }
+}
+
+function _toggleMovsDia() {
+  _setMovsColapsado(_movsDiaExpandido);
+}
+
+function _actualizarResumen() {
+  const entradas = _movsDia.filter(m => m.tipo === 'entrada').length;
+  const salidas  = _movsDia.filter(m => m.tipo === 'salida').length;
+  const el = document.getElementById('inv-movs-resumen');
+  if (el) el.textContent = `${entradas} entrada${entradas !== 1 ? 's' : ''} · ${salidas} salida${salidas !== 1 ? 's' : ''}`;
+}
+
+function _actualizarFechaLabel(fecha) {
+  const el = document.getElementById('inv-movs-fecha-label');
+  if (!el || !fecha) return;
+  const [y, m, d] = fecha.split('-');
+  el.textContent = `${d}/${m}/${y}`;
+}
+
+function _actualizarFiltros() {
+  document.querySelectorAll('.inv-filtro-btn').forEach(btn => {
+    const activo = btn.dataset.filtro === _movsDiaFiltro;
+    btn.style.borderBottom = activo ? '2px solid var(--green)' : '';
+    btn.style.color        = activo ? 'var(--green)' : '';
+    btn.style.fontWeight   = activo ? '600' : '';
+  });
+}
+
+async function _recargarMovDia() {
+  const fecha = document.getElementById('inv-movs-fecha')?.value || hoyISO();
+  _movsDia    = await getMovimientosInventario(_empresa, fecha);
+  _movsDiaPag = 0;
+  _actualizarResumen();
+  renderTablaMovimientos();
+}
+
+// ── Recargar tabla de stock actual ────────────────────
+async function _recargarTablaStock() {
+  _productos = await getProductos(_empresa);
+  _llenarSelects();
+
+  const snap     = await getDocs(collection(db, 'empresas', _empresa, 'movInventario'));
+  const movsTodos = snap.docs.map(d => d.data());
+
+  const porProducto = {};
+  movsTodos.forEach(m => {
+    if (!porProducto[m.productoId]) porProducto[m.productoId] = { entradas: 0, salidas: 0 };
+    if (m.tipo === 'entrada') porProducto[m.productoId].entradas += m.cantidad;
+    else                      porProducto[m.productoId].salidas  += m.cantidad;
+  });
+
+  _datosStock = _productos.map(p => ({
+    ...p,
+    entradas:    porProducto[p.id]?.entradas || 0,
+    salidas:     porProducto[p.id]?.salidas  || 0,
+    stockActual: (p.stockInicial || 0)
+                 + (porProducto[p.id]?.entradas || 0)
+                 - (porProducto[p.id]?.salidas  || 0)
+  }));
+
+  renderTablaInventario();
+}
+
+// ── Inventario actual: init y helpers ─────────────────
+async function initInventarioActual() {
+  _stockTab      = 'todos';
+  _stockBusqueda = '';
+  _stockPag      = 0;
+
+  // Búsqueda reactiva
+  const busquedaEl = document.getElementById('inv-stock-busqueda');
+  if (busquedaEl) {
+    const nuevo = busquedaEl.cloneNode(true);
+    busquedaEl.parentNode.replaceChild(nuevo, busquedaEl);
+    nuevo.value = '';
+    nuevo.addEventListener('input', () => {
+      _stockBusqueda = nuevo.value.trim();
+      _stockPag      = 0;
+      renderTablaInventario();
+    });
+  }
+
+  // Tabs de estado
+  document.querySelectorAll('.inv-stock-tab').forEach(btn => {
+    const nuevo = btn.cloneNode(true);
+    btn.parentNode.replaceChild(nuevo, btn);
+    nuevo.addEventListener('click', () => {
+      _stockTab = nuevo.dataset.stockTab;
+      _stockPag = 0;
+      renderTablaInventario();
+    });
+  });
+
+  // Botón exportar
+  const btnExp = document.getElementById('inv-btn-exportar-csv');
+  if (btnExp) {
+    const nuevo = btnExp.cloneNode(true);
+    btnExp.parentNode.replaceChild(nuevo, btnExp);
+    nuevo.addEventListener('click', _exportarCSVFiltrado);
+  }
+
+  await _recargarTablaStock();
+}
+
+function _estadoProducto(p) {
+  if (p.stockActual <= 0) return 'agotado';
+  if (p.stockMinimo !== null && p.stockMinimo !== undefined && p.stockActual <= p.stockMinimo) return 'bajo';
+  return 'ok';
+}
+
+function _estilosEstado(estado) {
+  if (estado === 'agotado') return {
+    badgeHtml:  `<span class="badge" style="background:var(--red-light,#FEE2E2);color:var(--red)">🔴 Agotado</span>`,
+    stockColor: 'var(--red)',
+    rowBg:      'background:color-mix(in srgb, var(--red) 6%, transparent)'
+  };
+  if (estado === 'bajo') return {
+    badgeHtml:  `<span class="badge" style="background:var(--amber-light,#FEF3C7);color:var(--amber,#B45309)">⚠️ Stock bajo</span>`,
+    stockColor: 'var(--amber,#B45309)',
+    rowBg:      ''
+  };
+  return {
+    badgeHtml:  `<span class="badge" style="background:var(--green-light,#D1FAE5);color:var(--green-dark,#065F46)">✅ OK</span>`,
+    stockColor: 'var(--green)',
+    rowBg:      ''
+  };
+}
+
+function _actualizarTabsStock() {
+  const conteos = { todos: _datosStock.length, ok: 0, bajo: 0, agotado: 0 };
+  _datosStock.forEach(p => { conteos[_estadoProducto(p)]++; });
+
+  document.querySelectorAll('.inv-stock-tab').forEach(btn => {
+    const tab    = btn.dataset.stockTab;
+    const activo = tab === _stockTab;
+    btn.style.borderBottom = activo ? '2px solid var(--green)' : '2px solid transparent';
+    btn.style.color        = activo ? 'var(--green)' : '';
+    btn.style.fontWeight   = activo ? '600' : '';
+    const countEl = btn.querySelector('.tab-count');
+    if (countEl) countEl.textContent = `(${conteos[tab] ?? 0})`;
+  });
+}
+
+function _renderPaginadorStock(total, totalPags) {
+  const pag = document.getElementById('inv-paginador-stock');
+  if (!pag) return;
+  if (totalPags <= 1) { pag.innerHTML = ''; return; }
+  pag.innerHTML = `
+    <span>Pág. ${_stockPag + 1} de ${totalPags}</span>
+    <button class="pag-arrow" id="inv-stock-pag-prev" ${_stockPag === 0 ? 'disabled' : ''}>&#8249;</button>
+    <button class="pag-arrow" id="inv-stock-pag-next" ${_stockPag >= totalPags - 1 ? 'disabled' : ''}>&#8250;</button>
+  `;
+  document.getElementById('inv-stock-pag-prev')?.addEventListener('click', () => {
+    if (_stockPag > 0) { _stockPag--; renderTablaInventario(); }
+  });
+  document.getElementById('inv-stock-pag-next')?.addEventListener('click', () => {
+    if (_stockPag < totalPags - 1) { _stockPag++; renderTablaInventario(); }
+  });
+}
+
+function _abrirModalDetalle(prod) {
+  const estado = _estadoProducto(prod);
+  const { badgeHtml, stockColor } = _estilosEstado(estado);
+
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop';
+  backdrop.innerHTML = `
+    <div class="modal" style="max-width:460px;width:100%">
+
+      <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:20px">
+        <div style="flex:1;min-width:0">
+          <h3 style="margin:0 0 8px">${toSentenceCase(prod.nombre)}</h3>
+          ${badgeHtml}
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:11px;color:var(--text-3);margin-bottom:2px">Stock actual</div>
+          <div style="font-size:30px;font-weight:700;line-height:1;color:${stockColor}">${prod.stockActual}</div>
+        </div>
+      </div>
+
+      <div style="background:var(--surface-2);border-radius:var(--radius-md);padding:14px 16px;margin-bottom:14px">
+        <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Información</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px">
+          <div><div style="color:var(--text-3);font-size:11px">Unidad</div><strong>${prod.unidad || '—'}</strong></div>
+          <div><div style="color:var(--text-3);font-size:11px">Stock inicial</div><strong>${prod.stockInicial ?? 0}</strong></div>
+          <div><div style="color:var(--text-3);font-size:11px">Stock mínimo</div><strong>${prod.stockMinimo ?? '—'}</strong></div>
+          <div></div>
+          <div><div style="color:var(--text-3);font-size:11px">Total entradas</div><strong style="color:var(--green)">${prod.entradas}</strong></div>
+          <div><div style="color:var(--text-3);font-size:11px">Total salidas</div><strong style="color:var(--red)">${prod.salidas}</strong></div>
+        </div>
+      </div>
+
+      <div style="background:var(--surface-2);border-radius:var(--radius-md);padding:14px 16px;margin-bottom:20px">
+        <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Consulta histórica</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="date" id="inv-det-fecha" style="height:32px;font-size:13px;flex:1" />
+          <button class="btn-primary" id="inv-det-consultar" style="height:32px;padding:0 14px;font-size:13px;white-space:nowrap">Consultar</button>
+        </div>
+        <div id="inv-det-resultado" style="margin-top:10px;display:none;font-size:13px;padding:8px 12px;background:var(--surface);border-radius:var(--radius-sm)"></div>
+      </div>
+
+      <div class="modal-btns" style="justify-content:space-between">
+        <button class="btn-secondary" id="inv-det-desactivar" style="color:var(--red)">Desactivar producto</button>
+        <button class="btn-secondary" id="inv-det-cerrar">Cerrar</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(backdrop);
+
+  backdrop.querySelector('#inv-det-fecha').value = hoyISO();
+
+  const close = () => backdrop.remove();
+  backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
+  backdrop.querySelector('#inv-det-cerrar').addEventListener('click', close);
+
+  backdrop.querySelector('#inv-det-consultar').addEventListener('click', async () => {
+    const fecha     = backdrop.querySelector('#inv-det-fecha').value;
+    const resultado = backdrop.querySelector('#inv-det-resultado');
+    if (!fecha) { toast('Selecciona una fecha.', 'error'); return; }
+    try {
+      const stock  = await getStockHistorico(_empresa, prod.id, fecha);
+      const [y, m, d] = fecha.split('-');
+      const color  = stock <= 0 ? 'var(--red)' : 'var(--green)';
+      resultado.innerHTML = `Stock al <strong>${d}/${m}/${y}</strong>: <strong style="font-size:16px;color:${color}">${stock}</strong> ${prod.unidad || 'unidades'}`;
+      resultado.style.display = '';
+    } catch {
+      toast('Error al consultar el histórico.', 'error');
+    }
+  });
+
+  backdrop.querySelector('#inv-det-desactivar').addEventListener('click', () => {
+    showConfirm({
+      title: 'Desactivar producto',
+      description: `¿Desactivar "${toSentenceCase(prod.nombre)}"? Ya no aparecerá para nuevos movimientos.`,
+      confirmText: 'Desactivar',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await desactivarProducto(_empresa, prod.id);
+          close();
+          toast('Producto desactivado.');
+          await _recargarTablaStock();
+        } catch {
+          toast('Error al desactivar.', 'error');
+        }
+      }
+    });
+  });
+}
+
+function _exportarCSVFiltrado() {
+  const q = _stockBusqueda.toLowerCase();
+  let filtrados = q
+    ? _datosStock.filter(p => p.nombre.toLowerCase().includes(q))
+    : [..._datosStock];
+  if (_stockTab !== 'todos') filtrados = filtrados.filter(p => _estadoProducto(p) === _stockTab);
+
+  if (!filtrados.length) { toast('No hay datos para exportar.', 'error'); return; }
+
+  const etiquetaEstado = e => e === 'agotado' ? 'Agotado' : e === 'bajo' ? 'Stock bajo' : 'OK';
+  const cabecera = 'nombre;unidad;stock_inicial;stock_actual;stock_minimo;estado';
+  const filas    = filtrados.map(p => [
+    toSentenceCase(p.nombre),
+    p.unidad || '',
+    p.stockInicial ?? 0,
+    p.stockActual,
+    p.stockMinimo ?? '',
+    etiquetaEstado(_estadoProducto(p))
+  ].join(';')).join('\n');
+
+  const blob = new Blob(['﻿' + cabecera + '\n' + filas], { type: 'text/csv;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `DiarIO_inventario_${hoyISO()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Render: tabla movimientos del día ─────────────────
+export function renderTablaMovimientos() {
+  const tbody = document.getElementById('inv-tbody-movimientos');
+  if (!tbody) return;
+
+  const filtrados = _movsDiaFiltro === 'todos'
+    ? _movsDia
+    : _movsDia.filter(m => m.tipo === _movsDiaFiltro);
+
+  const total     = filtrados.length;
+  const totalPags = Math.max(1, Math.ceil(total / POR_PAGINA_MOVS));
+  if (_movsDiaPag >= totalPags) _movsDiaPag = 0;
+
+  if (!total) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:20px 0;font-size:12px">Sin movimientos para esta fecha.</td></tr>`;
+    _renderPaginador(0, 0);
+    return;
+  }
+
+  const inicio = _movsDiaPag * POR_PAGINA_MOVS;
+  const pagina = filtrados.slice(inicio, inicio + POR_PAGINA_MOVS);
+
+  tbody.innerHTML = pagina.map(m => {
+    const badgeCls  = m.tipo === 'entrada' ? 'badge-venta' : 'badge-gasto';
+    const tipoLabel = m.tipo === 'entrada' ? 'Entrada' : 'Salida';
+    const notaHtml  = m.nota ? m.nota : '<span style="color:var(--text-3)">—</span>';
+    return `<tr>
+      <td>${toSentenceCase(m.productoNombre)}</td>
+      <td><span class="badge ${badgeCls}">${tipoLabel}</span></td>
+      <td style="text-align:right">${m.cantidad}</td>
+      <td>${notaHtml}</td>
+      <td>
+        <button class="btn-secondary" style="height:26px;padding:0 10px;font-size:11px"
+          data-movid="${m.id}">Eliminar</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  tbody.querySelectorAll('[data-movid]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const movId = btn.dataset.movid;
+      showConfirm({
+        title: 'Eliminar movimiento',
+        description: '¿Estás segura de que deseas eliminar este movimiento?',
+        confirmText: 'Eliminar',
+        danger: true,
+        onConfirm: async () => {
+          try {
+            await eliminarMovInventario(_empresa, movId);
+            toast('Movimiento eliminado.');
+            const fecha = document.getElementById('inv-movs-fecha')?.value || hoyISO();
+            _movsDia = await getMovimientosInventario(_empresa, fecha);
+            _actualizarResumen();
+            renderTablaMovimientos();
+            await _recargarTablaStock();
+          } catch {
+            toast('Error al eliminar.', 'error');
+          }
+        }
+      });
+    });
+  });
+
+  _renderPaginador(total, totalPags);
+}
+
+function _renderPaginador(total, totalPags) {
+  const pag = document.getElementById('inv-paginador-movs');
+  if (!pag) return;
+
+  if (totalPags <= 1) { pag.innerHTML = ''; return; }
+
+  pag.innerHTML = `
+    <span>Pág. ${_movsDiaPag + 1} de ${totalPags}</span>
+    <button class="pag-arrow" id="inv-pag-prev" ${_movsDiaPag === 0 ? 'disabled' : ''}>&#8249;</button>
+    <button class="pag-arrow" id="inv-pag-next" ${_movsDiaPag >= totalPags - 1 ? 'disabled' : ''}>&#8250;</button>
+  `;
+
+  document.getElementById('inv-pag-prev')?.addEventListener('click', () => {
+    if (_movsDiaPag > 0) { _movsDiaPag--; renderTablaMovimientos(); }
+  });
+  document.getElementById('inv-pag-next')?.addEventListener('click', () => {
+    if (_movsDiaPag < totalPags - 1) { _movsDiaPag++; renderTablaMovimientos(); }
+  });
+}
+
+// ── Render: tabla inventario actual ───────────────────
+export function renderTablaInventario() {
+  const tbody = document.getElementById('inv-tbody-stock');
+  if (!tbody) return;
+
+  _actualizarTabsStock();
+
+  const q = _stockBusqueda.toLowerCase();
+  let filtrados = q
+    ? _datosStock.filter(p => p.nombre.toLowerCase().includes(q))
+    : [..._datosStock];
+  if (_stockTab !== 'todos') filtrados = filtrados.filter(p => _estadoProducto(p) === _stockTab);
+
+  const total     = filtrados.length;
+  const totalPags = Math.max(1, Math.ceil(total / POR_PAGINA_STOCK));
+  if (_stockPag >= totalPags) _stockPag = 0;
+
+  if (!total) {
+    const msg = _datosStock.length
+      ? 'No se encontraron productos con ese criterio.'
+      : 'Sin productos registrados.';
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text-3);padding:20px 0;font-size:12px">${msg}</td></tr>`;
+    _renderPaginadorStock(0, 0);
+    return;
+  }
+
+  const inicio = _stockPag * POR_PAGINA_STOCK;
+  const pagina = filtrados.slice(inicio, inicio + POR_PAGINA_STOCK);
+
+  tbody.innerHTML = pagina.map(p => {
+    const estado = _estadoProducto(p);
+    const { badgeHtml, stockColor, rowBg } = _estilosEstado(estado);
+    return `<tr style="${rowBg}">
+      <td>${toSentenceCase(p.nombre)}</td>
+      <td>${p.unidad || '—'}</td>
+      <td style="text-align:right;font-weight:700;color:${stockColor}">${p.stockActual}</td>
+      <td style="text-align:right;color:var(--text-2)">${p.stockMinimo ?? '—'}</td>
+      <td>${badgeHtml}</td>
+      <td>
+        <button class="btn-secondary" style="height:26px;padding:0 10px;font-size:11px"
+          data-prodid="${p.id}">Ver</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  tbody.querySelectorAll('[data-prodid]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const prod = _datosStock.find(p => p.id === btn.dataset.prodid);
+      if (prod) _abrirModalDetalle(prod);
+    });
+  });
+
+  _renderPaginadorStock(total, totalPags);
+}
+
+// ── Autocomplete de unidades ──────────────────────────
+function _initAutocompleteUnidad() {
+  const inp   = document.getElementById('inv-prod-unidad');
+  const lista = document.getElementById('inv-prod-unidad-lista');
+  if (!inp || !lista) return;
+
+  let idxSel = -1;
+
+  function _mostrarItems(items) {
+    lista.innerHTML = items;
+    lista.style.display = items ? 'block' : 'none';
+    lista.querySelectorAll('.autocomplete-item').forEach(item => {
+      item.addEventListener('mousedown', async e => {
+        e.preventDefault();
+        if (item.dataset.nueva) {
+          const nombre = item.dataset.nueva;
+          inp.value = nombre;
+          lista.style.display = 'none';
+          await agregarUnidad(_empresa, nombre);
+          const display = nombre.charAt(0).toUpperCase() + nombre.slice(1).toLowerCase();
+          if (!_unidades.some(u => u.toLowerCase() === nombre.toLowerCase())) {
+            _unidades.push(display);
+          }
+          toast(`Unidad "${nombre}" agregada.`);
+        } else {
+          inp.value = item.textContent;
+          lista.style.display = 'none';
+        }
+        idxSel = -1;
+      });
+    });
+  }
+
+  inp.addEventListener('focus', () => {
+    if (inp.value) return;
+    const html = _unidades.slice(0, 10)
+      .map((u, i) => `<div class="autocomplete-item" data-idx="${i}">${u}</div>`).join('');
+    _mostrarItems(html);
+  });
+
+  inp.addEventListener('input', () => {
+    const q = inp.value.trim().toLowerCase();
+    idxSel = -1;
+    if (!q) { lista.style.display = 'none'; return; }
+
+    const coincidencias = _unidades.filter(u => u.toLowerCase().includes(q)).slice(0, 8);
+    const exacta        = _unidades.some(u => u.toLowerCase() === q);
+    const itemsHtml     = coincidencias
+      .map((u, i) => `<div class="autocomplete-item" data-idx="${i}">${u}</div>`).join('');
+    const nuevaHtml     = !exacta
+      ? `<div class="autocomplete-item" data-nueva="${inp.value.trim()}">+ Nueva unidad: "${inp.value.trim()}"</div>`
+      : '';
+    _mostrarItems(itemsHtml + nuevaHtml);
+  });
+
+  inp.addEventListener('keydown', e => {
+    const items = lista.querySelectorAll('.autocomplete-item');
+    if (!items.length || lista.style.display === 'none') return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      idxSel = Math.min(idxSel + 1, items.length - 1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      idxSel = Math.max(idxSel - 1, -1);
+    } else if (e.key === 'Enter' && idxSel >= 0) {
+      e.preventDefault();
+      items[idxSel].dispatchEvent(new MouseEvent('mousedown'));
+      return;
+    } else if (e.key === 'Escape') {
+      lista.style.display = 'none';
+      return;
+    }
+    items.forEach((it, i) => it.classList.toggle('selected', i === idxSel));
+    if (idxSel >= 0) items[idxSel].scrollIntoView({ block: 'nearest' });
+  });
+
+  inp.addEventListener('blur', () => {
+    setTimeout(() => { lista.style.display = 'none'; idxSel = -1; }, 150);
+  });
+}
+
+// ── Crear producto (formulario manual) ───────────────
+async function _crearProductoUI() {
+  const nombre    = document.getElementById('inv-prod-nombre')?.value?.trim();
+  const unidad    = document.getElementById('inv-prod-unidad')?.value?.trim();
+  const siRaw     = document.getElementById('inv-prod-stock')?.value;
+  const smRaw     = document.getElementById('inv-prod-stock-min')?.value?.trim();
+
+  if (!nombre) { toast('Ingresa el nombre del producto.', 'error'); return; }
+  if (!unidad) { toast('Ingresa la unidad de medida.', 'error'); return; }
+
+  const stockInicial = parseInt(siRaw || '0', 10);
+  if (isNaN(stockInicial) || stockInicial < 0) {
+    toast('El stock inicial debe ser 0 o mayor.', 'error'); return;
+  }
+
+  let stockMinimo = null;
+  if (smRaw) {
+    stockMinimo = parseInt(smRaw, 10);
+    if (isNaN(stockMinimo) || stockMinimo < 0) {
+      toast('El stock mínimo debe ser 0 o mayor.', 'error'); return;
+    }
+  }
+
+  const nombreUpper = nombre.toUpperCase();
+  if (_productos.some(p => p.nombre.toUpperCase() === nombreUpper)) {
+    toast('Ya existe un producto con ese nombre.', 'error'); return;
+  }
+
+  try {
+    await crearProducto(_empresa, { nombre, unidad, stockInicial, stockMinimo });
+    _cerrarModal();
+    toast('Producto creado.');
+    await _recargarTablaStock();
+  } catch {
+    toast('Error al crear el producto.', 'error');
+  }
+}
+
+// ── Carga masiva CSV ──────────────────────────────────
+function _descargarPlantillaCSV() {
+  const contenido =
+    'nombre;unidad;stock_inicial;stock_minimo\n' +
+    'Ron de Caldas;Botella;24;5\n' +
+    'Agua Cristal 600ml;Unidad;48;10\n' +
+    'Café Juan Valdez 500g;Paquete;12;3\n';
+  const blob = new Blob(['﻿' + contenido], { type: 'text/csv;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = 'DiarIO_plantilla_inventario.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function _procesarArchivo(file) {
+  const reader = new FileReader();
+  reader.onload  = e => {
+    const { validos, invalidos } = _parsearCSV(e.target.result);
+    _mostrarVistaPrevia(validos, invalidos);
+  };
+  reader.onerror = () => toast('Error al leer el archivo.', 'error');
+  reader.readAsText(file, 'UTF-8');
+}
+
+function _parsearCSV(texto) {
+  const lineas = texto.replace(/^﻿/, '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  if (lineas.length < 2) return { validos: [], invalidos: [] };
+
+  const validos   = [];
+  const invalidos = [];
+
+  lineas.slice(1).forEach((linea, idx) => {
+    const cols        = linea.split(';');
+    const nombre      = cols[0]?.trim();
+    const unidad      = cols[1]?.trim();
+    const siRaw       = cols[2]?.trim();
+    const smRaw       = cols[3]?.trim();
+
+    if (!nombre || !unidad) {
+      invalidos.push({ linea: idx + 2, texto: linea, error: 'Nombre y unidad son obligatorios' });
+      return;
+    }
+
+    const stockInicial = siRaw ? parseInt(siRaw, 10) : 0;
+    if (isNaN(stockInicial) || stockInicial < 0) {
+      invalidos.push({ linea: idx + 2, texto: linea, error: 'Stock inicial debe ser un número ≥ 0' });
+      return;
+    }
+
+    let stockMinimo = null;
+    if (smRaw) {
+      stockMinimo = parseInt(smRaw, 10);
+      if (isNaN(stockMinimo) || stockMinimo < 0) {
+        invalidos.push({ linea: idx + 2, texto: linea, error: 'Stock mínimo debe ser un número ≥ 0' });
+        return;
+      }
+    }
+
+    validos.push({ nombre, unidad, stockInicial, stockMinimo });
+  });
+
+  return { validos, invalidos };
+}
+
+function _mostrarVistaPrevia(validos, invalidos) {
+  const el = document.getElementById('inv-csv-preview');
+  if (!el) return;
+
+  if (!validos.length && !invalidos.length) {
+    el.innerHTML = `<p style="font-size:12px;color:var(--text-3)">El archivo no contiene filas de datos.</p>`;
+    return;
+  }
+
+  const filasOK  = validos.map(p => `<tr>
+    <td>${toSentenceCase(p.nombre)}</td>
+    <td>${p.unidad}</td>
+    <td style="text-align:right">${p.stockInicial}</td>
+    <td style="text-align:right">${p.stockMinimo ?? '<span style="color:var(--text-3)">—</span>'}</td>
+    <td><span class="badge badge-venta">OK</span></td>
+  </tr>`).join('');
+
+  const filasErr = invalidos.map(p => `<tr>
+    <td colspan="4" style="color:var(--red);font-size:12px">
+      Fila ${p.linea}: ${p.error} — <em>${p.texto}</em>
+    </td>
+    <td><span class="badge badge-gasto">Error</span></td>
+  </tr>`).join('');
+
+  el.innerHTML = `
+    <div class="card-title" style="margin-bottom:10px">
+      Vista previa — ${validos.length} válido${validos.length !== 1 ? 's' : ''}
+      ${invalidos.length ? `, ${invalidos.length} con error` : ''}
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Nombre</th><th>Unidad</th>
+          <th style="text-align:right">Stock inicial</th>
+          <th style="text-align:right">Stock mínimo</th>
+          <th>Estado</th>
+        </tr></thead>
+        <tbody>${filasOK}${filasErr}</tbody>
+      </table>
+    </div>
+    ${validos.length ? `
+    <div style="margin-top:12px;text-align:right">
+      <button class="btn-primary" id="inv-btn-confirmar-carga">
+        Confirmar carga (${validos.length} producto${validos.length !== 1 ? 's' : ''})
+      </button>
+    </div>` : ''}
+  `;
+
+  document.getElementById('inv-btn-confirmar-carga')?.addEventListener('click', () => {
+    _confirmarCargaMasiva(validos);
+  });
+}
+
+async function _confirmarCargaMasiva(productosValidos) {
+  const btnConfirmar = document.getElementById('inv-btn-confirmar-carga');
+  if (btnConfirmar) { btnConfirmar.disabled = true; btnConfirmar.textContent = 'Creando...'; }
+
+  let creados = 0;
+  let errores = 0;
+
+  for (const p of productosValidos) {
+    try {
+      const yaExisteUnidad = _unidades.some(u => u.toLowerCase() === p.unidad.toLowerCase());
+      if (!yaExisteUnidad) {
+        await agregarUnidad(_empresa, p.unidad);
+        const display = p.unidad.charAt(0).toUpperCase() + p.unidad.slice(1).toLowerCase();
+        _unidades.push(display);
+      }
+
+      const nombreUpper = p.nombre.trim().toUpperCase();
+      if (_productos.some(pr => pr.nombre.toUpperCase() === nombreUpper)) {
+        errores++; continue;
+      }
+
+      await crearProducto(_empresa, p);
+      creados++;
+    } catch {
+      errores++;
+    }
+  }
+
+  const msg = `${creados} producto${creados !== 1 ? 's' : ''} creado${creados !== 1 ? 's' : ''}` +
+    (errores ? `, ${errores} omitido${errores !== 1 ? 's' : ''} (duplicados o errores)` : '');
+  _cerrarModal();
+  toast(msg);
+
+  await _recargarTablaStock();
+}
+

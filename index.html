@@ -75,6 +75,7 @@
       <button class="nav-btn" id="nav-dashboard">Dashboard</button>
       <button class="nav-btn" id="nav-registro">Registro</button>
       <button class="nav-btn" id="nav-informes">Informes</button>
+      <button class="nav-btn hidden" id="nav-inventario">Inventario</button>
     </nav>
 
     <div class="topbar-right">
@@ -90,6 +91,7 @@
     <section class="page" id="page-dashboard"></section>
     <section class="page" id="page-registro"></section>
     <section class="page" id="page-informes"></section>
+    <section class="page" id="page-inventario"></section>
 
     <footer class="app-footer">
       Chiripa Company &mdash; DiarIO
@@ -111,11 +113,12 @@
       }
     }
 
-    // Cargar los tres fragmentos en paralelo
+    // Cargar los cuatro fragmentos en paralelo
     await Promise.all([
-      loadPage('page-dashboard', 'pages/dashboard.html'),
-      loadPage('page-registro',  'pages/registro.html'),
-      loadPage('page-informes',  'pages/informes.html'),
+      loadPage('page-dashboard',  'pages/dashboard.html'),
+      loadPage('page-registro',   'pages/registro.html'),
+      loadPage('page-informes',   'pages/informes.html'),
+      loadPage('page-inventario', 'pages/inventario.html'),
     ]);
 
     // Arrancar la app

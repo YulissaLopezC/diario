@@ -2,7 +2,8 @@
 // Orquesta el flujo: login → empresa → app
 
 import { initAuth, loginConGoogle, logout, getInitials } from './auth.js';
-import { cargarEmpresasDelUsuario, crearEmpresa, unirseAEmpresa, empresaActual, misEmpresas, setEmpresaActual, exposeAdminTools } from './empresa.js';
+import { cargarEmpresasDelUsuario, crearEmpresa, unirseAEmpresa, empresaActual, misEmpresas, setEmpresaActual, exposeAdminTools, getRolUsuario } from './empresa.js';
+import { inventarioHabilitado, habilitarInventario, deshabilitarInventario, initInventario } from './inventario.js';
 import { cargarSubcategorias, getSubcategorias, agregarSubcategoria } from './subcategorias.js';
 import { cargarCuentas, getCuentas, agregarCuenta, CUENTA_DEFAULT } from './cuentas.js';
 import { agregarMovimiento, getMovimientosMes, getMesesConDatos, eliminarMovimiento, editarMovimiento, getMovimientosDia, getProveedores } from './movimientos.js';
@@ -62,6 +63,7 @@ function onLogout() {
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('topbar').classList.add('hidden');
   document.getElementById('app').classList.add('hidden');
+  document.getElementById('nav-inventario')?.classList.add('hidden');
   hideLoader();
 }
 
@@ -73,6 +75,10 @@ async function iniciarApp() {
   exposeAdminTools(userActual.uid, userActual.email, userActual.displayName || '');
   renderTopbar();
   bindNav();
+
+  const habilitado = await inventarioHabilitado(empresaCodigo);
+  document.getElementById('nav-inventario')?.classList.toggle('hidden', !habilitado);
+
   await goToDashboard();
   hideLoader();
 }
@@ -90,7 +96,7 @@ function renderTopbar() {
 }
 
 // ── Menú usuario ───────────────────────────────────────────
-function abrirUserMenu(e) {
+async function abrirUserMenu(e) {
   e.stopPropagation();
 
   // Si ya está abierto, cerrarlo
@@ -99,6 +105,11 @@ function abrirUserMenu(e) {
 
   const empresa     = empresaActual;
   const tieneVarias = misEmpresas.length > 1;
+  const esAdmin     = getRolUsuario(userActual.uid) === 'admin';
+
+  // Leer siempre desde Firestore con el código de la empresa activa en este momento
+  // inventarioHabilitado ya captura errores internamente y retorna false en caso de fallo
+  const invActual = esAdmin ? await inventarioHabilitado(empresaCodigo) : false;
 
   const otrasEmpresas = misEmpresas
     .filter(em => em.codigo !== empresa?.codigo)
@@ -106,6 +117,12 @@ function abrirUserMenu(e) {
       <button class="user-menu-btn" data-codigo="${em.codigo}">
         Cambiar a <strong>${toSentenceCase(em.nombre)}</strong>
       </button>`).join('');
+
+  const btnInv = esAdmin
+    ? `<button class="user-menu-btn" id="btn-toggle-inv">
+         ${invActual ? 'Desactivar' : 'Activar'} inventario
+       </button>`
+    : '';
 
   const menu = document.createElement('div');
   menu.id        = 'user-menu';
@@ -122,6 +139,7 @@ function abrirUserMenu(e) {
     </div>
     ${tieneVarias ? `<div class="user-menu-section">${otrasEmpresas}</div>` : ''}
     <button class="user-menu-btn" id="btn-unirse-nueva">+ Unirme a otro local</button>
+    ${btnInv}
     <button class="user-menu-btn danger" id="btn-logout">Cerrar sesión</button>
   `;
 
@@ -140,6 +158,27 @@ function abrirUserMenu(e) {
     mostrarModalUnirse();
   });
 
+  // invActual capturado en el closure refleja el estado real de esta empresa
+  menu.querySelector('#btn-toggle-inv')?.addEventListener('click', async () => {
+    menu.remove();
+    try {
+      if (invActual) {
+        await deshabilitarInventario(empresaCodigo);
+        document.getElementById('nav-inventario')?.classList.add('hidden');
+        if (document.getElementById('page-inventario')?.classList.contains('active')) {
+          await goToDashboard();
+        }
+        toast('Inventario desactivado. Los datos se conservan.');
+      } else {
+        await habilitarInventario(empresaCodigo);
+        document.getElementById('nav-inventario')?.classList.remove('hidden');
+        toast('Inventario activado.');
+      }
+    } catch {
+      toast('Error al cambiar el estado del inventario.', 'error');
+    }
+  });
+
   menu.querySelectorAll('[data-codigo]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const codigo = btn.dataset.codigo;
@@ -150,6 +189,9 @@ function abrirUserMenu(e) {
       await cargarSubcategorias(codigo);
       await cargarCuentas(codigo);
       renderTopbar();
+      // Verificar inventario para la empresa recién seleccionada
+      const habilitado = await inventarioHabilitado(codigo);
+      document.getElementById('nav-inventario')?.classList.toggle('hidden', !habilitado);
       await goToDashboard();
       hideLoader();
       toast(`Cambiado a ${toSentenceCase(empresaActual?.nombre || '')}.`);
@@ -193,11 +235,21 @@ function mostrarModalUnirse() {
 }
 
 // ── Navegación ─────────────────────────────────────────────
+
+// showPage de ui.js solo conoce 3 páginas; este helper maneja las 4
+function activarPagina(name) {
+  ['dashboard', 'registro', 'informes', 'inventario'].forEach(p => {
+    document.getElementById(`page-${p}`)?.classList.toggle('active', p === name);
+    document.getElementById(`nav-${p}`)?.classList.toggle('active', p === name);
+  });
+}
+
 function bindNav() {
   document.getElementById('logo-btn').addEventListener('click', goToDashboard);
   document.getElementById('nav-dashboard').addEventListener('click', goToDashboard);
   document.getElementById('nav-registro').addEventListener('click', goToRegistro);
   document.getElementById('nav-informes').addEventListener('click', goToInformes);
+  document.getElementById('nav-inventario')?.addEventListener('click', goToInventario);
 
   // Chip: registrar una sola vez con data-bound
   const chip = document.getElementById('user-chip');
@@ -207,23 +259,28 @@ function bindNav() {
   }
 
   window.__navTo = (page) => {
-    if (page === 'dashboard') goToDashboard();
-    if (page === 'registro')  goToRegistro();
-    if (page === 'informes')  goToInformes();
+    if (page === 'dashboard')  goToDashboard();
+    if (page === 'registro')   goToRegistro();
+    if (page === 'informes')   goToInformes();
+    if (page === 'inventario') goToInventario();
   };
 }
 
 async function goToDashboard() {
-  showPage('dashboard');
+  activarPagina('dashboard');
   await renderDashboard(empresaCodigo, empresaActual?.nombre || '');
 }
 async function goToRegistro() {
-  showPage('registro');
+  activarPagina('registro');
   await initRegistro();
 }
 async function goToInformes() {
-  showPage('informes');
+  activarPagina('informes');
   await initInformes(empresaCodigo);
+}
+async function goToInventario() {
+  activarPagina('inventario');
+  await initInventario(empresaCodigo, userActual.uid);
 }
 
 // ── Banner resumen del día ─────────────────────────────────
@@ -327,6 +384,9 @@ async function initRegistro() {
   const selCat     = reemplazar('inp-categoria');
   const selSub     = reemplazar('inp-subcategoria');
   const selCuenta  = reemplazar('inp-cuenta');
+
+  _limpiarFiltros();
+  _bindFiltros();
 
   // Cargar proveedores para autocompletado (en paralelo con el resto)
   getProveedores(empresaCodigo).then(lista => {
@@ -519,20 +579,119 @@ function renderSelectorMes() {
     return `<option value="${i}">${labelMes(parseInt(mes), parseInt(anio))}</option>`;
   }).join('');
   sel.value    = String(mesSelIdx);
-  sel.onchange = async () => { mesSelIdx = parseInt(sel.value); await renderTabla(); };
+  sel.onchange = async () => { mesSelIdx = parseInt(sel.value); await renderTabla(true, true); };
   document.getElementById('btn-mes-prev').onclick = async () => {
-    if (mesSelIdx < mesesConDatos.length - 1) { mesSelIdx++; sel.value = String(mesSelIdx); await renderTabla(); }
+    if (mesSelIdx < mesesConDatos.length - 1) { mesSelIdx++; sel.value = String(mesSelIdx); await renderTabla(true, true); }
   };
   document.getElementById('btn-mes-next').onclick = async () => {
-    if (mesSelIdx > 0) { mesSelIdx--; sel.value = String(mesSelIdx); await renderTabla(); }
+    if (mesSelIdx > 0) { mesSelIdx--; sel.value = String(mesSelIdx); await renderTabla(true, true); }
   };
 }
 
 const POR_PAGINA = 15;
 let pagActual    = 1;
 let movsCache    = [];
+let filtroDesde     = '';
+let filtroHasta     = '';
+let filtroProveedor = '';
+let filtroCategoria = '';
+let movsExtendido   = null; // null = usar movsCache; array = datos de varios meses
 
-async function renderTabla(resetPag = true) {
+function _getMovsFiltrados() {
+  return (movsExtendido ?? movsCache).filter(m => {
+    if (filtroDesde || filtroHasta) {
+      const p   = m.fecha.split('/');
+      const iso = `${p[2]}-${p[1]}-${p[0]}`;
+      if (filtroDesde && iso < filtroDesde) return false;
+      if (filtroHasta && iso > filtroHasta) return false;
+    }
+    if (filtroProveedor && m.proveedor !== filtroProveedor) return false;
+    if (filtroCategoria && m.categoria !== filtroCategoria) return false;
+    return true;
+  });
+}
+
+function _limpiarFiltros() {
+  filtroDesde = filtroHasta = filtroProveedor = filtroCategoria = '';
+  movsExtendido = null;
+  ['filtro-desde', 'filtro-hasta'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  ['filtro-proveedor', 'filtro-categoria'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+}
+
+async function _cargarMovsExtendidos() {
+  if (!filtroDesde || !filtroHasta) { movsExtendido = null; return; }
+
+  const [yD, mD] = filtroDesde.split('-').map(Number);
+  const [yH, mH] = filtroHasta.split('-').map(Number);
+
+  // Construir lista de meses involucrados en el rango
+  const meses = [];
+  let y = yD, m = mD;
+  while (y < yH || (y === yH && m <= mH)) {
+    meses.push({ mes: m, anio: y });
+    m++; if (m > 12) { m = 1; y++; }
+  }
+
+  // Rango dentro de un solo mes → sin llamadas extra
+  if (meses.length <= 1) { movsExtendido = null; return; }
+
+  // Cargar solo los meses que no son el mes actual del selector
+  const claveActual = mesesConDatos[mesSelIdx] ?? '';
+  const extra = meses.filter(({ mes, anio }) =>
+    `${anio}-${String(mes).padStart(2, '0')}` !== claveActual
+  );
+
+  const resultados = await Promise.all(
+    extra.map(({ mes, anio }) => getMovimientosMes(empresaCodigo, mes, anio))
+  );
+
+  const toISO = f => { const [d, mo, yr] = f.split('/'); return `${yr}-${mo}-${d}`; };
+  movsExtendido = [...movsCache, ...resultados.flat()].sort((a, b) => {
+    const ia = toISO(a.fecha), ib = toISO(b.fecha);
+    if (ia !== ib) return ib.localeCompare(ia);
+    return (b.creadoEn?.seconds || 0) - (a.creadoEn?.seconds || 0);
+  });
+}
+
+function _actualizarDropdownProveedores() {
+  const sel = document.getElementById('filtro-proveedor');
+  if (!sel) return;
+  const set = new Set();
+  movsCache.forEach(m => { if (m.proveedor?.trim()) set.add(m.proveedor.trim()); });
+  sel.innerHTML =
+    '<option value="">Todos los proveedores</option>' +
+    [...set].sort().map(p => `<option value="${p}">${toSentenceCase(p)}</option>`).join('');
+  sel.value = filtroProveedor;
+}
+
+function _bindFiltros() {
+  ['filtro-desde', 'filtro-hasta', 'filtro-proveedor', 'filtro-categoria', 'filtro-limpiar'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const nuevo = el.cloneNode(true);
+    el.parentNode.replaceChild(nuevo, el);
+  });
+  const aplicar = () => { pagActual = 1; renderPagina(); };
+  const aplicarFecha = async e => {
+    if (e.target.id === 'filtro-desde') filtroDesde = e.target.value;
+    else filtroHasta = e.target.value;
+    await _cargarMovsExtendidos();
+    aplicar();
+  };
+  document.getElementById('filtro-desde')?.addEventListener('change', aplicarFecha);
+  document.getElementById('filtro-hasta')?.addEventListener('change', aplicarFecha);
+  document.getElementById('filtro-proveedor')?.addEventListener('change', e => { filtroProveedor = e.target.value; aplicar(); });
+  document.getElementById('filtro-categoria')?.addEventListener('change', e => { filtroCategoria = e.target.value; aplicar(); });
+  document.getElementById('filtro-limpiar')?.addEventListener('click', () => { _limpiarFiltros(); renderPagina(); });
+}
+
+async function renderTabla(resetPag = true, resetFiltros = false) {
   const wrap = document.getElementById('tabla-movimientos');
   if (!wrap) return;
   if (!mesesConDatos.length) {
@@ -548,20 +707,29 @@ async function renderTabla(resetPag = true) {
     document.getElementById('tabla-footer').innerHTML = '';
     return;
   }
-  if (resetPag) pagActual = 1;
+  if (resetPag)     pagActual = 1;
+  if (resetFiltros) _limpiarFiltros();
+  _actualizarDropdownProveedores();
+  await _cargarMovsExtendidos();
   renderPagina();
 }
 
 function renderPagina() {
   const wrap = document.getElementById('tabla-movimientos');
   if (!wrap) return;
-  const totalPags = Math.ceil(movsCache.length / POR_PAGINA);
-  if (pagActual > totalPags) pagActual = totalPags;
+  const filtrados = _getMovsFiltrados();
+  if (!filtrados.length && movsCache.length) {
+    wrap.innerHTML = emptyState('Sin movimientos para los filtros aplicados.');
+    renderFooterTotales(0, 0, 0);
+    return;
+  }
+  const totalPags = Math.ceil(filtrados.length / POR_PAGINA);
+  if (pagActual > totalPags) pagActual = Math.max(1, totalPags);
   const inicio  = (pagActual - 1) * POR_PAGINA;
-  const pagMovs = movsCache.slice(inicio, inicio + POR_PAGINA);
+  const pagMovs = filtrados.slice(inicio, inicio + POR_PAGINA);
 
   let totalVenta = 0, totalGasto = 0, totalCompra = 0;
-  movsCache.forEach(m => {
+  filtrados.forEach(m => {
     const cat = (m.categoria || '').toLowerCase();
     if (cat === 'venta')  totalVenta  += m.valor;
     if (cat === 'gasto')  totalGasto  += m.valor;
