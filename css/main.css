@@ -208,7 +208,10 @@ a { color: inherit; text-decoration: none; }
 .badge-venta      { background: var(--green-light); color: var(--green-dark); }
 .badge-gasto      { background: var(--red-light);   color: var(--red); }
 .badge-compra     { background: var(--blue-light);  color: var(--blue); }
-.badge-movimiento { background: var(--amber-light); color: var(--amber); }
+.badge-movimiento  { background: var(--amber-light); color: var(--amber); }
+.badge-perdida     { background: var(--amber-light); color: var(--amber); }
+.badge-cortesia    { background: var(--blue-light);  color: var(--blue); }
+.badge-otra-salida { background: var(--surface-2);   color: var(--text-2); }
 
 /* ── Botón editar fila ── */
 .btn-edit {

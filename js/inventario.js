@@ -92,7 +92,7 @@ export async function desactivarProducto(empresaCodigo, productoId) {
 // --- MOVIMIENTOS ---
 
 export async function registrarMovInventario(empresaCodigo, userId, datos) {
-  if (datos.tipo === 'salida') {
+  if (['salida', 'PERDIDA', 'CORTESIA', 'OTRA_SALIDA'].includes(datos.tipo)) {
     const snapMovs = await getDocs(
       query(
         collection(db, 'empresas', empresaCodigo, 'movInventario'),
@@ -173,6 +173,7 @@ export async function getStockHistorico(empresaCodigo, productoId, fecha) {
 // ======================================================
 
 import { toast, showConfirm, hoyISO, toSentenceCase } from './ui.js';
+import { getRolUsuario } from './empresa.js';
 
 const POR_PAGINA_MOVS  = 10;
 const POR_PAGINA_STOCK = 20;
@@ -180,6 +181,7 @@ const POR_PAGINA_STOCK = 20;
 // Estado de módulo
 let _empresa          = '';
 let _userId           = '';
+let _rol              = 'usuario';
 let _productos        = [];
 let _movsDia          = [];
 let _movsDiaPag       = 0;
@@ -195,9 +197,25 @@ let _stockPag         = 0;
 export async function initInventario(empresaCodigo, userId) {
   _empresa = empresaCodigo;
   _userId  = userId;
+  _rol     = getRolUsuario(userId) || 'usuario';
 
   const elFecha = document.getElementById('inv-fecha');
-  if (elFecha && !elFecha.value) elFecha.value = hoyISO();
+  const hoy     = hoyISO();
+  if (elFecha) {
+    elFecha.value = hoy;
+    if (_rol === 'usuario') {
+      elFecha.min              = hoy;
+      elFecha.max              = hoy;
+      elFecha.readOnly         = true;
+      elFecha.style.background = 'var(--surface-2)';
+      elFecha.style.cursor     = 'not-allowed';
+      elFecha.title            = 'Solo puedes registrar movimientos del día de hoy';
+    } else {
+      elFecha.removeAttribute('min');
+      elFecha.removeAttribute('max');
+      elFecha.readOnly         = false;
+    }
+  }
 
   const [unidades] = await Promise.all([
     cargarUnidades(empresaCodigo),
@@ -231,7 +249,7 @@ function _llenarSelects() {
 
 // ── Binding de eventos (cloneNode para limpiar listeners) ─
 function _bindEventos() {
-  ['inv-btn-registrar', 'inv-btn-abrir-modal']
+  ['inv-btn-registrar', 'inv-btn-abrir-modal', 'inv-btn-informe']
     .forEach(id => {
       const btn = document.getElementById(id);
       if (!btn) return;
@@ -243,6 +261,8 @@ function _bindEventos() {
     ?.addEventListener('click', _registrar);
   document.getElementById('inv-btn-abrir-modal')
     ?.addEventListener('click', abrirModalCrearProducto);
+  document.getElementById('inv-btn-informe')
+    ?.addEventListener('click', abrirModalInforme);
 
   // Cerrar modal al clic fuera
   document.getElementById('inv-modal-backdrop')
@@ -351,6 +371,10 @@ async function _registrar() {
   const nota       = document.getElementById('inv-nota')?.value?.trim() || '';
 
   if (!fecha)      { toast('Ingresa una fecha.', 'error'); return; }
+  if (_rol === 'usuario' && fecha !== hoyISO()) {
+    toast('Solo puedes registrar movimientos del día de hoy.', 'error');
+    return;
+  }
   if (!productoId) { toast('Selecciona un producto.', 'error'); return; }
   const cantidad = parseInt(cantidadRaw, 10);
   if (!cantidad || cantidad <= 0) { toast('Ingresa una cantidad válida.', 'error'); return; }
@@ -741,8 +765,14 @@ export function renderTablaMovimientos() {
   const pagina = filtrados.slice(inicio, inicio + POR_PAGINA_MOVS);
 
   tbody.innerHTML = pagina.map(m => {
-    const badgeCls  = m.tipo === 'entrada' ? 'badge-venta' : 'badge-gasto';
-    const tipoLabel = m.tipo === 'entrada' ? 'Entrada' : 'Salida';
+    const tipoMap = {
+      'entrada':     ['badge-venta',       'Entrada'],
+      'salida':      ['badge-gasto',       'Salida'],
+      'PERDIDA':     ['badge-perdida',     'Pérdida'],
+      'CORTESIA':    ['badge-cortesia',    'Cortesía'],
+      'OTRA_SALIDA': ['badge-otra-salida', 'Otra salida'],
+    };
+    const [badgeCls, tipoLabel] = tipoMap[m.tipo] ?? ['badge-gasto', m.tipo];
     const notaHtml  = m.nota ? m.nota : '<span style="color:var(--text-3)">—</span>';
     return `<tr>
       <td>${toSentenceCase(m.productoNombre)}</td>
@@ -1130,5 +1160,174 @@ async function _confirmarCargaMasiva(productosValidos) {
   toast(msg);
 
   await _recargarTablaStock();
+}
+
+// ── Informe de inventario por período ────────────────
+
+function _diaAnterior(fechaISO) {
+  const d = new Date(fechaISO + 'T00:00:00');
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function _isoADisplay(fechaISO) {
+  const [y, m, d] = fechaISO.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+export async function generarInformeInventario(fechaDesde, fechaHasta) {
+  const [snapProds, snapMovs] = await Promise.all([
+    getDocs(collection(db, 'empresas', _empresa, 'productos')),
+    getDocs(collection(db, 'empresas', _empresa, 'movInventario'))
+  ]);
+
+  const productos = snapProds.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+  const movsTodos  = snapMovs.docs.map(d => d.data());
+  const fechaAntes = _diaAnterior(fechaDesde);
+
+  return productos.map(p => {
+    const movsProd = movsTodos.filter(m => m.productoId === p.id);
+
+    const stockInicial = movsProd
+      .filter(m => m.fecha <= fechaAntes)
+      .reduce((acc, m) => m.tipo === 'entrada' ? acc + m.cantidad : acc - m.cantidad, p.stockInicial ?? 0);
+
+    const movsRango    = movsProd.filter(m => m.fecha >= fechaDesde && m.fecha <= fechaHasta);
+    const entradas     = movsRango.filter(m => m.tipo === 'entrada').reduce((a, m) => a + m.cantidad, 0);
+    const salidas      = movsRango.filter(m => m.tipo === 'salida').reduce((a, m) => a + m.cantidad, 0);
+    const otrasSalidas = movsRango
+      .filter(m => ['PERDIDA', 'CORTESIA', 'OTRA_SALIDA'].includes(m.tipo))
+      .reduce((a, m) => a + m.cantidad, 0);
+    const stockFinal   = stockInicial + entradas - salidas - otrasSalidas;
+
+    return {
+      nombre: p.nombre,
+      unidad: p.unidad || '—',
+      stockMinimo: p.stockMinimo ?? null,
+      stockInicial,
+      entradas,
+      salidas,
+      otrasSalidas,
+      stockFinal,
+    };
+  });
+}
+
+export function exportarInformeInventario(filas, fechaDesde, fechaHasta) {
+  const cabecera = 'Producto;Unidad;Stock inicial;Entradas;Salidas;Otras salidas;Stock final';
+  const cuerpo   = filas.map(f => [
+    toSentenceCase(f.nombre),
+    f.unidad,
+    f.stockInicial,
+    f.entradas,
+    f.salidas,
+    f.otrasSalidas,
+    f.stockFinal,
+  ].join(';')).join('\n');
+
+  const blob = new Blob(['﻿' + cabecera + '\n' + cuerpo], { type: 'text/csv;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `DiarIO_Inventario_${_empresa}_${fechaDesde}_${fechaHasta}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function abrirModalInforme() {
+  const backdrop  = document.getElementById('inv-inf-backdrop');
+  const preview   = document.getElementById('inv-inf-preview');
+  const loading   = document.getElementById('inv-inf-loading');
+  const btnExcelF = document.getElementById('inv-inf-btn-excel-footer');
+  if (!backdrop) return;
+
+  // Resetear estado visual
+  preview.style.display   = 'none';
+  loading.style.display   = 'none';
+  btnExcelF.style.display = 'none';
+  document.getElementById('inv-inf-tbody').textContent   = '';
+  document.getElementById('inv-inf-periodo').textContent = '';
+  backdrop.style.display = '';
+
+  let _filas = [];
+
+  const close = () => { backdrop.style.display = 'none'; };
+  backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
+
+  // Limpiar listeners acumulados con cloneNode
+  ['inv-inf-btn-cerrar', 'inv-inf-btn-preview', 'inv-inf-btn-excel-top', 'inv-inf-btn-excel-footer']
+    .forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const n = el.cloneNode(true);
+      el.parentNode.replaceChild(n, el);
+    });
+
+  document.getElementById('inv-inf-btn-cerrar').addEventListener('click', close);
+
+  const _descargar = () => {
+    if (!_filas.length) { toast('Genera la vista previa primero.', 'error'); return; }
+    exportarInformeInventario(
+      _filas,
+      document.getElementById('inv-inf-desde').value,
+      document.getElementById('inv-inf-hasta').value
+    );
+  };
+  document.getElementById('inv-inf-btn-excel-top').addEventListener('click', _descargar);
+  document.getElementById('inv-inf-btn-excel-footer').addEventListener('click', _descargar);
+
+  document.getElementById('inv-inf-btn-preview').addEventListener('click', async () => {
+    const desde = document.getElementById('inv-inf-desde').value;
+    const hasta = document.getElementById('inv-inf-hasta').value;
+
+    if (!desde || !hasta) { toast('Ingresa las dos fechas.', 'error'); return; }
+    if (desde > hasta)    { toast('La fecha Desde no puede ser mayor que Hasta.', 'error'); return; }
+
+    preview.style.display   = 'none';
+    loading.style.display   = '';
+    btnExcelF.style.display = 'none';
+    _filas = [];
+
+    try {
+      _filas = await generarInformeInventario(desde, hasta);
+    } catch {
+      toast('Error al generar el informe.', 'error');
+      loading.style.display = 'none';
+      return;
+    }
+
+    loading.style.display = 'none';
+
+    if (!_filas.length) {
+      document.getElementById('inv-inf-tbody').innerHTML =
+        `<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:20px 0;font-size:12px">No hay productos registrados en esta empresa.</td></tr>`;
+      preview.style.display = '';
+      return;
+    }
+
+    document.getElementById('inv-inf-periodo').textContent =
+      `Período: ${_isoADisplay(desde)} al ${_isoADisplay(hasta)} · ${_filas.length} producto${_filas.length !== 1 ? 's' : ''}`;
+
+    document.getElementById('inv-inf-tbody').innerHTML = _filas.map(f => {
+      let rowBg = '';
+      if (f.stockFinal <= 0) rowBg = 'background:var(--red-light)';
+      else if (f.stockMinimo !== null && f.stockFinal <= f.stockMinimo) rowBg = 'background:var(--amber-light)';
+      return `<tr style="${rowBg}">
+        <td>${toSentenceCase(f.nombre)}</td>
+        <td>${f.unidad}</td>
+        <td style="text-align:right;font-weight:700">${f.stockInicial}</td>
+        <td style="text-align:right;color:var(--green)">${f.entradas}</td>
+        <td style="text-align:right;color:var(--red)">${f.salidas}</td>
+        <td style="text-align:right;color:var(--amber)">${f.otrasSalidas}</td>
+        <td style="text-align:right;font-weight:700">${f.stockFinal}</td>
+      </tr>`;
+    }).join('');
+
+    preview.style.display   = '';
+    btnExcelF.style.display = '';
+  });
 }
 
