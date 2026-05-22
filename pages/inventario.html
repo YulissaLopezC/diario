@@ -32,7 +32,7 @@
     </div>
 
     <div class="field">
-      <label for="inv-tipo">Tipo</label>
+      <label for="inv-tipo">Movimiento</label>
       <select id="inv-tipo">
         <option value="entrada">Entrada</option>
         <option value="salida">Salida</option>
@@ -102,7 +102,7 @@
           <thead>
             <tr>
               <th>Producto</th>
-              <th>Tipo</th>
+              <th>Movimiento</th>
               <th style="text-align:right">Cantidad</th>
               <th>Nota</th>
               <th>Acciones</th>
@@ -142,6 +142,13 @@
       autocomplete="off" style="width:100%;box-sizing:border-box" />
   </div>
 
+  <!-- Filtro por tipo -->
+  <div style="margin-bottom:10px">
+    <select id="inv-stock-filtro-tipo" style="height:32px;font-size:13px;min-width:160px">
+      <option value="todos">Todos los tipos</option>
+    </select>
+  </div>
+
   <!-- Tabs de estado -->
   <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:16px;overflow-x:auto">
     <button class="inv-stock-tab" data-stock-tab="todos"
@@ -164,6 +171,7 @@
       <thead>
         <tr>
           <th>Producto</th>
+          <th>Tipo</th>
           <th>Unidad</th>
           <th style="text-align:right">Stock</th>
           <th style="text-align:right">Mínimo</th>
@@ -173,7 +181,7 @@
       </thead>
       <tbody id="inv-tbody-stock">
         <tr>
-          <td colspan="6" style="text-align:center;color:var(--text-3);padding:20px 0;font-size:12px">
+          <td colspan="7" style="text-align:center;color:var(--text-3);padding:20px 0;font-size:12px">
             Sin productos registrados.
           </td>
         </tr>
@@ -213,6 +221,14 @@
           <div class="autocomplete-wrap">
             <input type="text" id="inv-prod-unidad" placeholder="Ej: Botella" autocomplete="off" />
             <div class="autocomplete-list" id="inv-prod-unidad-lista" style="display:none"></div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="inv-prod-tipo">Tipo de producto</label>
+          <div class="autocomplete-wrap">
+            <input type="text" id="inv-prod-tipo" placeholder="Escribe y crea tu primer tipo..." autocomplete="off" />
+            <div class="autocomplete-list" id="inv-prod-tipo-lista" style="display:none"></div>
           </div>
         </div>
 
@@ -317,6 +333,7 @@
           <thead>
             <tr>
               <th>Producto</th>
+              <th>Tipo</th>
               <th>Unidad</th>
               <th style="text-align:right">Stock inicial</th>
               <th style="text-align:right">Entradas</th>

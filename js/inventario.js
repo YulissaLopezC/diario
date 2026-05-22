@@ -54,6 +54,21 @@ export async function agregarUnidad(empresaCodigo, nombre) {
   );
 }
 
+// --- TIPOS DE PRODUCTO ---
+
+export async function cargarTiposProducto(empresaCodigo) {
+  const snap = await getDoc(doc(db, 'empresas', empresaCodigo, 'config', 'tiposProducto'));
+  return snap.exists() ? (snap.data().tipos || []) : [];
+}
+
+export async function agregarTipoProducto(empresaCodigo, nombre) {
+  await setDoc(
+    doc(db, 'empresas', empresaCodigo, 'config', 'tiposProducto'),
+    { tipos: arrayUnion(nombre.trim().toUpperCase()) },
+    { merge: true }
+  );
+}
+
 // --- PRODUCTOS ---
 
 export async function crearProducto(empresaCodigo, datos) {
@@ -62,6 +77,7 @@ export async function crearProducto(empresaCodigo, datos) {
     {
       nombre:       datos.nombre.trim().toUpperCase(),
       unidad:       datos.unidad.trim(),
+      tipo:         datos.tipo ? datos.tipo.trim().toUpperCase() : '',
       stockInicial: datos.stockInicial ?? 0,
       stockMinimo:  datos.stockMinimo ?? null,
       activo:       true,
@@ -189,9 +205,13 @@ let _movsDiaFiltro    = 'todos';
 let _movsDiaExpandido = false;
 let _datosStock       = [];
 let _unidades         = [];
+let _tipos            = [];
 let _stockTab         = 'todos';
 let _stockBusqueda    = '';
 let _stockPag         = 0;
+let _stockTipoFiltro  = 'todos';
+
+export function getTiposProducto() { return _tipos; }
 
 // ── Inicialización principal ───────────────────────────
 export async function initInventario(empresaCodigo, userId) {
@@ -217,11 +237,13 @@ export async function initInventario(empresaCodigo, userId) {
     }
   }
 
-  const [unidades] = await Promise.all([
+  const [unidades, tipos] = await Promise.all([
     cargarUnidades(empresaCodigo),
+    cargarTiposProducto(empresaCodigo),
     _cargarProductos()
   ]);
   _unidades = unidades;
+  _tipos    = tipos.map(t => t.charAt(0).toUpperCase() + t.slice(1).toLowerCase());
 
   await Promise.all([initMovimientosDia(), initInventarioActual()]);
 
@@ -270,19 +292,22 @@ function _bindEventos() {
       if (e.target === document.getElementById('inv-modal-backdrop')) _cerrarModal();
     });
 
-  // Autocomplete de unidades (los inputs viven en el modal del DOM)
+  // Autocomplete de unidades y tipos (los inputs viven en el modal del DOM)
   _initAutocompleteUnidad();
+  _initAutocompleteTipo();
 }
 
 // ── Modal: Crear producto ──────────────────────────────
 export function abrirModalCrearProducto() {
   // Resetear formulario
-  const nombre = document.getElementById('inv-prod-nombre');
-  const unidad = document.getElementById('inv-prod-unidad');
-  const stock  = document.getElementById('inv-prod-stock');
+  const nombre   = document.getElementById('inv-prod-nombre');
+  const unidad   = document.getElementById('inv-prod-unidad');
+  const tipo     = document.getElementById('inv-prod-tipo');
+  const stock    = document.getElementById('inv-prod-stock');
   const stockMin = document.getElementById('inv-prod-stock-min');
   if (nombre)   nombre.value   = '';
   if (unidad)   unidad.value   = '';
+  if (tipo)     tipo.value     = '';
   if (stock)    stock.value    = '0';
   if (stockMin) stockMin.value = '';
 
@@ -527,9 +552,10 @@ async function _recargarTablaStock() {
 
 // ── Inventario actual: init y helpers ─────────────────
 async function initInventarioActual() {
-  _stockTab      = 'todos';
-  _stockBusqueda = '';
-  _stockPag      = 0;
+  _stockTab         = 'todos';
+  _stockBusqueda    = '';
+  _stockPag         = 0;
+  _stockTipoFiltro  = 'todos';
 
   // Búsqueda reactiva
   const busquedaEl = document.getElementById('inv-stock-busqueda');
@@ -554,6 +580,18 @@ async function initInventarioActual() {
       renderTablaInventario();
     });
   });
+
+  // Filtro por tipo
+  const filtroTipo = document.getElementById('inv-stock-filtro-tipo');
+  if (filtroTipo) {
+    const nuevoFiltro = filtroTipo.cloneNode(true);
+    filtroTipo.parentNode.replaceChild(nuevoFiltro, filtroTipo);
+    nuevoFiltro.addEventListener('change', () => {
+      _stockTipoFiltro = nuevoFiltro.value;
+      _stockPag        = 0;
+      renderTablaInventario();
+    });
+  }
 
   // Botón exportar
   const btnExp = document.getElementById('inv-btn-exportar-csv');
@@ -590,9 +628,24 @@ function _estilosEstado(estado) {
   };
 }
 
+function _actualizarFiltroTipo() {
+  const sel = document.getElementById('inv-stock-filtro-tipo');
+  if (!sel) return;
+  const tiposSet = new Set(_datosStock.map(p => p.tipo || '').filter(Boolean));
+  const tiposOrdenados = [...tiposSet].sort();
+  sel.innerHTML = `<option value="todos">Todos los tipos</option>` +
+    tiposOrdenados.map(t => {
+      const display = t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+      return `<option value="${t}"${_stockTipoFiltro === t ? ' selected' : ''}>${display}</option>`;
+    }).join('');
+}
+
 function _actualizarTabsStock() {
-  const conteos = { todos: _datosStock.length, ok: 0, bajo: 0, agotado: 0 };
-  _datosStock.forEach(p => { conteos[_estadoProducto(p)]++; });
+  const base = _stockTipoFiltro === 'todos'
+    ? _datosStock
+    : _datosStock.filter(p => (p.tipo || '').toUpperCase() === _stockTipoFiltro.toUpperCase());
+  const conteos = { todos: base.length, ok: 0, bajo: 0, agotado: 0 };
+  base.forEach(p => { conteos[_estadoProducto(p)]++; });
 
   document.querySelectorAll('.inv-stock-tab').forEach(btn => {
     const tab    = btn.dataset.stockTab;
@@ -645,10 +698,10 @@ function _abrirModalDetalle(prod) {
       <div style="background:var(--surface-2);border-radius:var(--radius-md);padding:14px 16px;margin-bottom:14px">
         <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Información</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px">
+          <div><div style="color:var(--text-3);font-size:11px">Tipo</div><strong>${prod.tipo ? prod.tipo.charAt(0).toUpperCase() + prod.tipo.slice(1).toLowerCase() : '—'}</strong></div>
           <div><div style="color:var(--text-3);font-size:11px">Unidad</div><strong>${prod.unidad || '—'}</strong></div>
           <div><div style="color:var(--text-3);font-size:11px">Stock inicial</div><strong>${prod.stockInicial ?? 0}</strong></div>
           <div><div style="color:var(--text-3);font-size:11px">Stock mínimo</div><strong>${prod.stockMinimo ?? '—'}</strong></div>
-          <div></div>
           <div><div style="color:var(--text-3);font-size:11px">Total entradas</div><strong style="color:var(--green)">${prod.entradas}</strong></div>
           <div><div style="color:var(--text-3);font-size:11px">Total salidas</div><strong style="color:var(--red)">${prod.salidas}</strong></div>
         </div>
@@ -723,9 +776,10 @@ function _exportarCSVFiltrado() {
   if (!filtrados.length) { toast('No hay datos para exportar.', 'error'); return; }
 
   const etiquetaEstado = e => e === 'agotado' ? 'Agotado' : e === 'bajo' ? 'Stock bajo' : 'OK';
-  const cabecera = 'nombre;unidad;stock_inicial;stock_actual;stock_minimo;estado';
+  const cabecera = 'nombre;tipo;unidad;stock_inicial;stock_actual;stock_minimo;estado';
   const filas    = filtrados.map(p => [
     toSentenceCase(p.nombre),
+    p.tipo ? p.tipo.charAt(0).toUpperCase() + p.tipo.slice(1).toLowerCase() : '',
     p.unidad || '',
     p.stockInicial ?? 0,
     p.stockActual,
@@ -839,12 +893,15 @@ export function renderTablaInventario() {
   const tbody = document.getElementById('inv-tbody-stock');
   if (!tbody) return;
 
+  _actualizarFiltroTipo();
   _actualizarTabsStock();
 
   const q = _stockBusqueda.toLowerCase();
   let filtrados = q
     ? _datosStock.filter(p => p.nombre.toLowerCase().includes(q))
     : [..._datosStock];
+  if (_stockTipoFiltro !== 'todos')
+    filtrados = filtrados.filter(p => (p.tipo || '').toUpperCase() === _stockTipoFiltro.toUpperCase());
   if (_stockTab !== 'todos') filtrados = filtrados.filter(p => _estadoProducto(p) === _stockTab);
 
   const total     = filtrados.length;
@@ -855,7 +912,7 @@ export function renderTablaInventario() {
     const msg = _datosStock.length
       ? 'No se encontraron productos con ese criterio.'
       : 'Sin productos registrados.';
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text-3);padding:20px 0;font-size:12px">${msg}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:20px 0;font-size:12px">${msg}</td></tr>`;
     _renderPaginadorStock(0, 0);
     return;
   }
@@ -866,8 +923,12 @@ export function renderTablaInventario() {
   tbody.innerHTML = pagina.map(p => {
     const estado = _estadoProducto(p);
     const { badgeHtml, stockColor, rowBg } = _estilosEstado(estado);
+    const tipoDisplay = p.tipo
+      ? p.tipo.charAt(0).toUpperCase() + p.tipo.slice(1).toLowerCase()
+      : '<span style="color:var(--text-3)">—</span>';
     return `<tr style="${rowBg}">
       <td>${toSentenceCase(p.nombre)}</td>
+      <td>${tipoDisplay}</td>
       <td>${p.unidad || '—'}</td>
       <td style="text-align:right;font-weight:700;color:${stockColor}">${p.stockActual}</td>
       <td style="text-align:right;color:var(--text-2)">${p.stockMinimo ?? '—'}</td>
@@ -970,15 +1031,99 @@ function _initAutocompleteUnidad() {
   });
 }
 
+// ── Autocomplete de tipos de producto ────────────────
+function _initAutocompleteTipo() {
+  const inp   = document.getElementById('inv-prod-tipo');
+  const lista = document.getElementById('inv-prod-tipo-lista');
+  if (!inp || !lista) return;
+
+  let idxSel = -1;
+
+  function _mostrarItems(items) {
+    lista.innerHTML = items;
+    lista.style.display = items ? 'block' : 'none';
+    lista.querySelectorAll('.autocomplete-item').forEach(item => {
+      item.addEventListener('mousedown', async e => {
+        e.preventDefault();
+        if (item.dataset.nuevo) {
+          const nombre = item.dataset.nuevo;
+          inp.value = nombre;
+          lista.style.display = 'none';
+          await agregarTipoProducto(_empresa, nombre);
+          const display = nombre.charAt(0).toUpperCase() + nombre.slice(1).toLowerCase();
+          if (!_tipos.some(t => t.toLowerCase() === nombre.toLowerCase())) {
+            _tipos.push(display);
+          }
+          _actualizarFiltroTipo();
+          toast(`Tipo "${nombre}" agregado.`);
+        } else {
+          inp.value = item.textContent;
+          lista.style.display = 'none';
+        }
+        idxSel = -1;
+      });
+    });
+  }
+
+  inp.addEventListener('focus', () => {
+    if (inp.value) return;
+    const html = _tipos.slice(0, 10)
+      .map((t, i) => `<div class="autocomplete-item" data-idx="${i}">${t}</div>`).join('');
+    _mostrarItems(html || `<div class="autocomplete-item" style="color:var(--text-3);pointer-events:none;font-size:12px">Sin tipos creados aún</div>`);
+  });
+
+  inp.addEventListener('input', () => {
+    const q = inp.value.trim().toLowerCase();
+    idxSel = -1;
+    if (!q) { lista.style.display = 'none'; return; }
+
+    const coincidencias = _tipos.filter(t => t.toLowerCase().includes(q)).slice(0, 8);
+    const exacta        = _tipos.some(t => t.toLowerCase() === q);
+    const itemsHtml     = coincidencias
+      .map((t, i) => `<div class="autocomplete-item" data-idx="${i}">${t}</div>`).join('');
+    const nuevoHtml     = !exacta
+      ? `<div class="autocomplete-item" data-nuevo="${inp.value.trim()}">+ Nuevo tipo de producto: "${inp.value.trim()}"</div>`
+      : '';
+    _mostrarItems(itemsHtml + nuevoHtml);
+  });
+
+  inp.addEventListener('keydown', e => {
+    const items = lista.querySelectorAll('.autocomplete-item');
+    if (!items.length || lista.style.display === 'none') return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      idxSel = Math.min(idxSel + 1, items.length - 1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      idxSel = Math.max(idxSel - 1, -1);
+    } else if (e.key === 'Enter' && idxSel >= 0) {
+      e.preventDefault();
+      items[idxSel].dispatchEvent(new MouseEvent('mousedown'));
+      return;
+    } else if (e.key === 'Escape') {
+      lista.style.display = 'none';
+      return;
+    }
+    items.forEach((it, i) => it.classList.toggle('selected', i === idxSel));
+    if (idxSel >= 0) items[idxSel].scrollIntoView({ block: 'nearest' });
+  });
+
+  inp.addEventListener('blur', () => {
+    setTimeout(() => { lista.style.display = 'none'; idxSel = -1; }, 150);
+  });
+}
+
 // ── Crear producto (formulario manual) ───────────────
 async function _crearProductoUI() {
   const nombre    = document.getElementById('inv-prod-nombre')?.value?.trim();
   const unidad    = document.getElementById('inv-prod-unidad')?.value?.trim();
+  const tipo      = document.getElementById('inv-prod-tipo')?.value?.trim();
   const siRaw     = document.getElementById('inv-prod-stock')?.value;
   const smRaw     = document.getElementById('inv-prod-stock-min')?.value?.trim();
 
   if (!nombre) { toast('Ingresa el nombre del producto.', 'error'); return; }
   if (!unidad) { toast('Ingresa la unidad de medida.', 'error'); return; }
+  if (!tipo)   { toast('Selecciona o crea un tipo de producto.', 'error'); return; }
 
   const stockInicial = parseInt(siRaw || '0', 10);
   if (isNaN(stockInicial) || stockInicial < 0) {
@@ -999,7 +1144,17 @@ async function _crearProductoUI() {
   }
 
   try {
-    await crearProducto(_empresa, { nombre, unidad, stockInicial, stockMinimo });
+    // Guardar tipo en Firestore si es nuevo
+    const tipoUpper = tipo.toUpperCase();
+    const tipoExiste = _tipos.some(t => t.toUpperCase() === tipoUpper);
+    if (!tipoExiste) {
+      await agregarTipoProducto(_empresa, tipo);
+      const display = tipo.charAt(0).toUpperCase() + tipo.slice(1).toLowerCase();
+      _tipos.push(display);
+      _actualizarFiltroTipo();
+    }
+
+    await crearProducto(_empresa, { nombre, unidad, tipo, stockInicial, stockMinimo });
     _cerrarModal();
     toast('Producto creado.');
     await _recargarTablaStock();
@@ -1011,10 +1166,10 @@ async function _crearProductoUI() {
 // ── Carga masiva CSV ──────────────────────────────────
 function _descargarPlantillaCSV() {
   const contenido =
-    'nombre;unidad;stock_inicial;stock_minimo\n' +
-    'Ron de Caldas;Botella;24;5\n' +
-    'Agua Cristal 600ml;Unidad;48;10\n' +
-    'Café Juan Valdez 500g;Paquete;12;3\n';
+    'nombre;unidad;tipo;stock_inicial;stock_minimo\n' +
+    'Ron de Caldas;Botella;Ron;24;5\n' +
+    'Agua Cristal;Unidad;Gaseosa;48;10\n' +
+    'Café Juan Valdez 500g;Paquete;Café;12;3\n';
   const blob = new Blob(['﻿' + contenido], { type: 'text/csv;charset=utf-8' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
@@ -1041,14 +1196,23 @@ function _parsearCSV(texto) {
   const invalidos = [];
 
   lineas.slice(1).forEach((linea, idx) => {
-    const cols        = linea.split(';');
-    const nombre      = cols[0]?.trim();
-    const unidad      = cols[1]?.trim();
-    const siRaw       = cols[2]?.trim();
-    const smRaw       = cols[3]?.trim();
+    const cols   = linea.split(';');
+    const nombre = cols[0]?.trim();
+    const unidad = cols[1]?.trim();
+    const tipo   = cols[2]?.trim();
+    const siRaw  = cols[3]?.trim();
+    const smRaw  = cols[4]?.trim();
 
     if (!nombre || !unidad) {
       invalidos.push({ linea: idx + 2, texto: linea, error: 'Nombre y unidad son obligatorios' });
+      return;
+    }
+    if (!tipo) {
+      invalidos.push({ linea: idx + 2, texto: linea, error: `El tipo de producto es obligatorio — fila ${idx + 2}` });
+      return;
+    }
+    if (_productos.some(p => p.nombre.toUpperCase() === nombre.toUpperCase())) {
+      invalidos.push({ linea: idx + 2, texto: linea, error: 'Ya existe un producto con este nombre' });
       return;
     }
 
@@ -1067,7 +1231,9 @@ function _parsearCSV(texto) {
       }
     }
 
-    validos.push({ nombre, unidad, stockInicial, stockMinimo });
+    const tipoNuevo   = !_tipos.some(t => t.toUpperCase() === tipo.toUpperCase());
+    const unidadNueva = !_unidades.some(u => u.toLowerCase() === unidad.toLowerCase());
+    validos.push({ nombre, unidad, tipo, stockInicial, stockMinimo, tipoNuevo, unidadNueva });
   });
 
   return { validos, invalidos };
@@ -1082,19 +1248,32 @@ function _mostrarVistaPrevia(validos, invalidos) {
     return;
   }
 
-  const filasOK  = validos.map(p => `<tr>
-    <td>${toSentenceCase(p.nombre)}</td>
-    <td>${p.unidad}</td>
-    <td style="text-align:right">${p.stockInicial}</td>
-    <td style="text-align:right">${p.stockMinimo ?? '<span style="color:var(--text-3)">—</span>'}</td>
-    <td><span class="badge badge-venta">OK</span></td>
-  </tr>`).join('');
+  const filasOK = validos.map(p => {
+    let estadoBadge;
+    if (p.tipoNuevo && p.unidadNueva) {
+      estadoBadge = `<span class="badge" style="background:#EDE9FE;color:#6D28D9">🆕 Tipo: ${p.tipo} · Unidad: ${p.unidad}</span>`;
+    } else if (p.tipoNuevo) {
+      estadoBadge = `<span class="badge" style="background:#EDE9FE;color:#6D28D9">🆕 Tipo nuevo: ${p.tipo}</span>`;
+    } else if (p.unidadNueva) {
+      estadoBadge = `<span class="badge" style="background:#EDE9FE;color:#6D28D9">🆕 Unidad nueva: ${p.unidad}</span>`;
+    } else {
+      estadoBadge = `<span class="badge badge-venta">✅ Listo</span>`;
+    }
+    return `<tr>
+      <td>${toSentenceCase(p.nombre)}</td>
+      <td>${p.unidad}</td>
+      <td>${p.tipo}</td>
+      <td style="text-align:right">${p.stockInicial}</td>
+      <td style="text-align:right">${p.stockMinimo ?? '<span style="color:var(--text-3)">—</span>'}</td>
+      <td>${estadoBadge}</td>
+    </tr>`;
+  }).join('');
 
   const filasErr = invalidos.map(p => `<tr>
-    <td colspan="4" style="color:var(--red);font-size:12px">
+    <td colspan="5" style="color:var(--red);font-size:12px">
       Fila ${p.linea}: ${p.error} — <em>${p.texto}</em>
     </td>
-    <td><span class="badge badge-gasto">Error</span></td>
+    <td><span class="badge badge-gasto">❌ Error</span></td>
   </tr>`).join('');
 
   el.innerHTML = `
@@ -1105,7 +1284,7 @@ function _mostrarVistaPrevia(validos, invalidos) {
     <div class="table-wrap">
       <table>
         <thead><tr>
-          <th>Nombre</th><th>Unidad</th>
+          <th>Nombre</th><th>Unidad</th><th>Tipo</th>
           <th style="text-align:right">Stock inicial</th>
           <th style="text-align:right">Stock mínimo</th>
           <th>Estado</th>
@@ -1130,21 +1309,25 @@ async function _confirmarCargaMasiva(productosValidos) {
   const btnConfirmar = document.getElementById('inv-btn-confirmar-carga');
   if (btnConfirmar) { btnConfirmar.disabled = true; btnConfirmar.textContent = 'Creando...'; }
 
-  let creados = 0;
-  let errores = 0;
+  let creados       = 0;
+  let tiposNuevos   = 0;
+  let unidadesNuevas = 0;
+  let errores       = 0;
 
   for (const p of productosValidos) {
     try {
-      const yaExisteUnidad = _unidades.some(u => u.toLowerCase() === p.unidad.toLowerCase());
-      if (!yaExisteUnidad) {
+      if (p.unidadNueva) {
         await agregarUnidad(_empresa, p.unidad);
         const display = p.unidad.charAt(0).toUpperCase() + p.unidad.slice(1).toLowerCase();
         _unidades.push(display);
+        unidadesNuevas++;
       }
 
-      const nombreUpper = p.nombre.trim().toUpperCase();
-      if (_productos.some(pr => pr.nombre.toUpperCase() === nombreUpper)) {
-        errores++; continue;
+      if (p.tipoNuevo) {
+        await agregarTipoProducto(_empresa, p.tipo);
+        const display = p.tipo.charAt(0).toUpperCase() + p.tipo.slice(1).toLowerCase();
+        _tipos.push(display);
+        tiposNuevos++;
       }
 
       await crearProducto(_empresa, p);
@@ -1154,10 +1337,13 @@ async function _confirmarCargaMasiva(productosValidos) {
     }
   }
 
-  const msg = `${creados} producto${creados !== 1 ? 's' : ''} creado${creados !== 1 ? 's' : ''}` +
-    (errores ? `, ${errores} omitido${errores !== 1 ? 's' : ''} (duplicados o errores)` : '');
+  const partes = [`${creados} producto${creados !== 1 ? 's' : ''} creado${creados !== 1 ? 's' : ''}`];
+  if (tiposNuevos)    partes.push(`${tiposNuevos} tipo${tiposNuevos !== 1 ? 's' : ''} nuevo${tiposNuevos !== 1 ? 's' : ''} creado${tiposNuevos !== 1 ? 's' : ''}`);
+  if (unidadesNuevas) partes.push(`${unidadesNuevas} unidad${unidadesNuevas !== 1 ? 'es' : ''} nueva${unidadesNuevas !== 1 ? 's' : ''} creada${unidadesNuevas !== 1 ? 's' : ''}`);
+  if (errores)        partes.push(`${errores} error${errores !== 1 ? 'es' : ''}`);
+
   _cerrarModal();
-  toast(msg);
+  toast(partes.join(', '));
 
   await _recargarTablaStock();
 }
@@ -1183,7 +1369,12 @@ export async function generarInformeInventario(fechaDesde, fechaHasta) {
 
   const productos = snapProds.docs
     .map(d => ({ id: d.id, ...d.data() }))
-    .sort((a, b) => a.nombre.localeCompare(b.nombre));
+    .sort((a, b) => {
+      const ta = (a.tipo || '').toUpperCase();
+      const tb = (b.tipo || '').toUpperCase();
+      if (ta !== tb) return ta.localeCompare(tb);
+      return a.nombre.localeCompare(b.nombre);
+    });
 
   const movsTodos  = snapMovs.docs.map(d => d.data());
   const fechaAntes = _diaAnterior(fechaDesde);
@@ -1204,8 +1395,9 @@ export async function generarInformeInventario(fechaDesde, fechaHasta) {
     const stockFinal   = stockInicial + entradas - salidas - otrasSalidas;
 
     return {
-      nombre: p.nombre,
-      unidad: p.unidad || '—',
+      nombre:      p.nombre,
+      tipo:        p.tipo || '',
+      unidad:      p.unidad || '—',
       stockMinimo: p.stockMinimo ?? null,
       stockInicial,
       entradas,
@@ -1217,16 +1409,28 @@ export async function generarInformeInventario(fechaDesde, fechaHasta) {
 }
 
 export function exportarInformeInventario(filas, fechaDesde, fechaHasta) {
-  const cabecera = 'Producto;Unidad;Stock inicial;Entradas;Salidas;Otras salidas;Stock final';
-  const cuerpo   = filas.map(f => [
-    toSentenceCase(f.nombre),
-    f.unidad,
-    f.stockInicial,
-    f.entradas,
-    f.salidas,
-    f.otrasSalidas,
-    f.stockFinal,
-  ].join(';')).join('\n');
+  const cabecera = 'Producto;Tipo;Unidad;Stock inicial;Entradas;Salidas;Otras salidas;Stock final';
+  let cuerpo = '';
+  let tipoActual = null;
+  filas.forEach(f => {
+    const tipo = f.tipo || '—';
+    if (tipo !== tipoActual) {
+      tipoActual = tipo;
+      const tipoDisplay = tipo.charAt(0).toUpperCase() + tipo.slice(1).toLowerCase();
+      cuerpo += `${tipoDisplay};;;;;;;\n`;
+    }
+    cuerpo += [
+      toSentenceCase(f.nombre),
+      tipo.charAt(0).toUpperCase() + tipo.slice(1).toLowerCase(),
+      f.unidad,
+      f.stockInicial,
+      f.entradas,
+      f.salidas,
+      f.otrasSalidas,
+      f.stockFinal,
+    ].join(';') + '\n';
+  });
+  cuerpo = cuerpo.trimEnd();
 
   const blob = new Blob(['﻿' + cabecera + '\n' + cuerpo], { type: 'text/csv;charset=utf-8' });
   const url  = URL.createObjectURL(blob);
@@ -1303,7 +1507,7 @@ export function abrirModalInforme() {
 
     if (!_filas.length) {
       document.getElementById('inv-inf-tbody').innerHTML =
-        `<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:20px 0;font-size:12px">No hay productos registrados en esta empresa.</td></tr>`;
+        `<tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:20px 0;font-size:12px">No hay productos registrados en esta empresa.</td></tr>`;
       preview.style.display = '';
       return;
     }
@@ -1311,12 +1515,24 @@ export function abrirModalInforme() {
     document.getElementById('inv-inf-periodo').textContent =
       `Período: ${_isoADisplay(desde)} al ${_isoADisplay(hasta)} · ${_filas.length} producto${_filas.length !== 1 ? 's' : ''}`;
 
+    let tipoActualPrev = null;
     document.getElementById('inv-inf-tbody').innerHTML = _filas.map(f => {
       let rowBg = '';
       if (f.stockFinal <= 0) rowBg = 'background:var(--red-light)';
       else if (f.stockMinimo !== null && f.stockFinal <= f.stockMinimo) rowBg = 'background:var(--amber-light)';
-      return `<tr style="${rowBg}">
+      const tipo = f.tipo || '—';
+      let separador = '';
+      if (tipo !== tipoActualPrev) {
+        tipoActualPrev = tipo;
+        const tipoDisplay = tipo.charAt(0).toUpperCase() + tipo.slice(1).toLowerCase();
+        separador = `<tr style="background:var(--surface-2)">
+          <td colspan="8" style="font-weight:600;font-size:11px;padding:5px 8px;color:var(--text-2);letter-spacing:.3px">${tipoDisplay}</td>
+        </tr>`;
+      }
+      const tipoDisplay = tipo.charAt(0).toUpperCase() + tipo.slice(1).toLowerCase();
+      return separador + `<tr style="${rowBg}">
         <td>${toSentenceCase(f.nombre)}</td>
+        <td style="color:var(--text-2);font-size:12px">${tipoDisplay}</td>
         <td>${f.unidad}</td>
         <td style="text-align:right;font-weight:700">${f.stockInicial}</td>
         <td style="text-align:right;color:var(--green)">${f.entradas}</td>
