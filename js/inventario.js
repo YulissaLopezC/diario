@@ -312,21 +312,23 @@ export function abrirModalCrearProducto() {
   if (stockMin) stockMin.value = '';
 
   // Resetear estado CSV
-  const inputCSV  = document.getElementById('inv-input-csv');
-  const nombreEl  = document.getElementById('inv-nombre-archivo');
-  const previewEl = document.getElementById('inv-csv-preview');
-  const btnCargar = document.getElementById('inv-btn-cargar-csv');
-  if (inputCSV)  inputCSV.value            = '';
-  if (nombreEl)  { nombreEl.textContent = ''; nombreEl.style.display = 'none'; }
-  if (previewEl) previewEl.innerHTML       = '';
-  if (btnCargar) btnCargar.style.display   = 'none';
+  const inputCSV     = document.getElementById('inv-input-csv');
+  const nombreEl     = document.getElementById('inv-nombre-archivo');
+  const previewEl    = document.getElementById('inv-csv-preview');
+  const btnCargar    = document.getElementById('inv-btn-cargar-csv');
+  const btnConfirmar = document.getElementById('inv-btn-confirmar-carga');
+  if (inputCSV)     inputCSV.value                = '';
+  if (nombreEl)     { nombreEl.textContent = ''; nombreEl.style.display = 'none'; }
+  if (previewEl)    previewEl.innerHTML            = '';
+  if (btnCargar)    btnCargar.style.display        = 'none';
+  if (btnConfirmar) btnConfirmar.style.display     = 'none';
 
   // Mostrar vista formulario, ocultar vista CSV
   document.getElementById('inv-modal-vista-form').style.display = '';
   document.getElementById('inv-modal-vista-csv').style.display  = 'none';
 
-  // Mostrar modal y rebindear botones
-  document.getElementById('inv-modal-backdrop').style.display = '';
+  // Mostrar modal centrado con flex y rebindear botones
+  document.getElementById('inv-modal-backdrop').style.display = 'flex';
   _bindModalBotones();
 
   setTimeout(() => document.getElementById('inv-prod-nombre')?.focus(), 50);
@@ -342,7 +344,7 @@ function _bindModalBotones() {
   [
     'inv-modal-cancelar-form', 'inv-modal-cancelar-csv',
     'inv-btn-crear-producto', 'inv-link-csv', 'inv-btn-volver-form',
-    'inv-btn-descargar-plantilla', 'inv-btn-cargar-csv'
+    'inv-btn-descargar-plantilla', 'inv-btn-cargar-csv', 'inv-btn-confirmar-carga'
   ].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -356,7 +358,7 @@ function _bindModalBotones() {
 
   document.getElementById('inv-link-csv')?.addEventListener('click', () => {
     document.getElementById('inv-modal-vista-form').style.display = 'none';
-    document.getElementById('inv-modal-vista-csv').style.display  = '';
+    document.getElementById('inv-modal-vista-csv').style.display  = 'flex';
   });
   document.getElementById('inv-btn-volver-form')?.addEventListener('click', () => {
     document.getElementById('inv-modal-vista-form').style.display = '';
@@ -1292,17 +1294,23 @@ function _mostrarVistaPrevia(validos, invalidos) {
         <tbody>${filasOK}${filasErr}</tbody>
       </table>
     </div>
-    ${validos.length ? `
-    <div style="margin-top:12px;text-align:right">
-      <button class="btn-primary" id="inv-btn-confirmar-carga">
-        Confirmar carga (${validos.length} producto${validos.length !== 1 ? 's' : ''})
-      </button>
-    </div>` : ''}
   `;
 
-  document.getElementById('inv-btn-confirmar-carga')?.addEventListener('click', () => {
-    _confirmarCargaMasiva(validos);
-  });
+  // Mover botón confirmar al footer fijo del modal
+  const btnCargar    = document.getElementById('inv-btn-cargar-csv');
+  const btnConfirmar = document.getElementById('inv-btn-confirmar-carga');
+  if (btnCargar) btnCargar.style.display = 'none';
+  if (btnConfirmar) {
+    const nuevo = btnConfirmar.cloneNode(true);
+    btnConfirmar.parentNode.replaceChild(nuevo, btnConfirmar);
+    if (validos.length) {
+      nuevo.style.display  = '';
+      nuevo.textContent    = `Confirmar carga (${validos.length} producto${validos.length !== 1 ? 's' : ''})`;
+      nuevo.addEventListener('click', () => _confirmarCargaMasiva(validos));
+    } else {
+      nuevo.style.display = 'none';
+    }
+  }
 }
 
 async function _confirmarCargaMasiva(productosValidos) {
