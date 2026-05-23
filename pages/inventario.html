@@ -26,9 +26,10 @@
 
     <div class="field">
       <label for="inv-producto">Producto</label>
-      <select id="inv-producto">
-        <option value="">— Selecciona —</option>
-      </select>
+      <div class="autocomplete-wrap">
+        <input type="text" id="inv-producto" placeholder="Buscar producto..." autocomplete="off" />
+        <div class="autocomplete-list" id="inv-producto-lista" style="display:none"></div>
+      </div>
     </div>
 
     <div class="field">

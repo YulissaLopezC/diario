@@ -206,6 +206,7 @@ let _movsDiaExpandido = false;
 let _datosStock       = [];
 let _unidades         = [];
 let _tipos            = [];
+let _productoIdSel    = '';
 let _stockTab         = 'todos';
 let _stockBusqueda    = '';
 let _stockPag         = 0;
@@ -256,17 +257,7 @@ async function _cargarProductos() {
 }
 
 function _llenarSelects() {
-  const opts = _productos.length
-    ? _productos.map(p => `<option value="${p.id}">${toSentenceCase(p.nombre)}</option>`).join('')
-    : '<option value="" disabled>Sin productos</option>';
-
-  ['inv-producto'].forEach(id => {
-    const sel = document.getElementById(id);
-    if (!sel) return;
-    const prev = sel.value;
-    sel.innerHTML = `<option value="">— Selecciona —</option>${opts}`;
-    if (prev) sel.value = prev;
-  });
+  // El campo de producto usa autocomplete; lee _productos directamente al escribir.
 }
 
 // ── Binding de eventos (cloneNode para limpiar listeners) ─
@@ -292,7 +283,10 @@ function _bindEventos() {
       if (e.target === document.getElementById('inv-modal-backdrop')) _cerrarModal();
     });
 
-  // Autocomplete de unidades y tipos (los inputs viven en el modal del DOM)
+  // Autocomplete de producto (formulario de movimiento)
+  _initAutocompleteProducto();
+
+  // Autocomplete de unidades y tipos (modal de crear producto)
   _initAutocompleteUnidad();
   _initAutocompleteTipo();
 }
@@ -392,7 +386,7 @@ function _bindModalBotones() {
 // ── Registrar movimiento ───────────────────────────────
 async function _registrar() {
   const fecha      = document.getElementById('inv-fecha')?.value;
-  const productoId = document.getElementById('inv-producto')?.value;
+  const productoId = _productoIdSel;
   const tipo       = document.getElementById('inv-tipo')?.value;
   const cantidadRaw = document.getElementById('inv-cantidad')?.value;
   const nota       = document.getElementById('inv-nota')?.value?.trim() || '';
@@ -950,6 +944,90 @@ export function renderTablaInventario() {
   });
 
   _renderPaginadorStock(total, totalPags);
+}
+
+// ── Autocomplete de producto (formulario de movimiento) ──
+function _initAutocompleteProducto() {
+  const inp   = document.getElementById('inv-producto');
+  const lista = document.getElementById('inv-producto-lista');
+  if (!inp || !lista) return;
+
+  let idxSel = -1;
+
+  function _itemsHtml(lista_prods) {
+    return lista_prods
+      .map((p, i) => {
+        const nombre = toSentenceCase(p.nombre);
+        return `<div class="autocomplete-item" data-id="${p.id}" data-nombre="${nombre}" data-idx="${i}">${nombre}</div>`;
+      })
+      .join('');
+  }
+
+  function _mostrarItems(html) {
+    lista.innerHTML = html;
+    lista.style.display = html ? 'block' : 'none';
+    lista.querySelectorAll('.autocomplete-item[data-id]').forEach(item => {
+      item.addEventListener('mousedown', e => {
+        e.preventDefault();
+        _productoIdSel = item.dataset.id;
+        inp.value      = item.dataset.nombre;
+        lista.style.display = 'none';
+        idxSel = -1;
+      });
+    });
+  }
+
+  function _filtrar(q) {
+    if (!q) return _productos.slice(0, 10);
+    return _productos
+      .filter(p => toSentenceCase(p.nombre).toLowerCase().includes(q))
+      .slice(0, 10);
+  }
+
+  inp.addEventListener('focus', () => {
+    const q = inp.value.trim().toLowerCase();
+    const coincidencias = _filtrar(q);
+    _mostrarItems(coincidencias.length
+      ? _itemsHtml(coincidencias)
+      : `<div class="autocomplete-item" style="color:var(--text-3);pointer-events:none;font-size:12px">Sin productos</div>`
+    );
+  });
+
+  inp.addEventListener('input', () => {
+    const q = inp.value.trim().toLowerCase();
+    _productoIdSel = '';
+    idxSel = -1;
+    const coincidencias = _filtrar(q);
+    _mostrarItems(coincidencias.length
+      ? _itemsHtml(coincidencias)
+      : `<div class="autocomplete-item" style="color:var(--text-3);pointer-events:none;font-size:12px">Sin resultados</div>`
+    );
+  });
+
+  inp.addEventListener('keydown', e => {
+    const items = lista.querySelectorAll('.autocomplete-item[data-id]');
+    if (!items.length || lista.style.display === 'none') return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      idxSel = Math.min(idxSel + 1, items.length - 1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      idxSel = Math.max(idxSel - 1, -1);
+    } else if (e.key === 'Enter' && idxSel >= 0) {
+      e.preventDefault();
+      items[idxSel].dispatchEvent(new MouseEvent('mousedown'));
+      return;
+    } else if (e.key === 'Escape') {
+      lista.style.display = 'none';
+      return;
+    }
+    items.forEach((it, i) => it.classList.toggle('selected', i === idxSel));
+    if (idxSel >= 0) items[idxSel].scrollIntoView({ block: 'nearest' });
+  });
+
+  inp.addEventListener('blur', () => {
+    setTimeout(() => { lista.style.display = 'none'; idxSel = -1; }, 150);
+  });
 }
 
 // ── Autocomplete de unidades ──────────────────────────
