@@ -1356,17 +1356,21 @@ async function _confirmarCargaMasiva(productosValidos) {
   for (const p of productosValidos) {
     try {
       if (p.unidadNueva) {
-        await agregarUnidad(_empresa, p.unidad);
         const display = p.unidad.charAt(0).toUpperCase() + p.unidad.slice(1).toLowerCase();
-        _unidades.push(display);
-        unidadesNuevas++;
+        if (!_unidades.some(u => u.toLowerCase() === display.toLowerCase())) {
+          await agregarUnidad(_empresa, p.unidad);
+          _unidades.push(display);
+          unidadesNuevas++;
+        }
       }
 
       if (p.tipoNuevo) {
-        await agregarTipoProducto(_empresa, p.tipo);
         const display = p.tipo.charAt(0).toUpperCase() + p.tipo.slice(1).toLowerCase();
-        _tipos.push(display);
-        tiposNuevos++;
+        if (!_tipos.some(t => t.toLowerCase() === display.toLowerCase())) {
+          await agregarTipoProducto(_empresa, p.tipo);
+          _tipos.push(display);
+          tiposNuevos++;
+        }
       }
 
       await crearProducto(_empresa, p);
@@ -1375,6 +1379,14 @@ async function _confirmarCargaMasiva(productosValidos) {
       errores++;
     }
   }
+
+  // Recargar desde Firestore para dejar el cache local sincronizado
+  const [tiposFS, unidadesFS] = await Promise.all([
+    cargarTiposProducto(_empresa),
+    cargarUnidades(_empresa)
+  ]);
+  _tipos    = tiposFS.map(t => t.charAt(0).toUpperCase() + t.slice(1).toLowerCase());
+  _unidades = unidadesFS;
 
   const partes = [`${creados} producto${creados !== 1 ? 's' : ''} creado${creados !== 1 ? 's' : ''}`];
   if (tiposNuevos)    partes.push(`${tiposNuevos} tipo${tiposNuevos !== 1 ? 's' : ''} nuevo${tiposNuevos !== 1 ? 's' : ''} creado${tiposNuevos !== 1 ? 's' : ''}`);
