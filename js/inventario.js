@@ -1180,11 +1180,36 @@ function _descargarPlantillaCSV() {
   URL.revokeObjectURL(url);
 }
 
+function _detectarDelimitador(primeraLinea) {
+  const conPuntoYComa = (primeraLinea.match(/;/g) || []).length;
+  const conComa       = (primeraLinea.match(/,/g) || []).length;
+  return conPuntoYComa >= conComa ? ';' : ',';
+}
+
+function _parsearCeldas(linea, delimitador) {
+  const celdas = [];
+  let celda = '';
+  let enComillas = false;
+  for (let i = 0; i < linea.length; i++) {
+    const ch = linea[i];
+    if (ch === '"') {
+      enComillas = !enComillas;
+    } else if (ch === delimitador && !enComillas) {
+      celdas.push(celda.trim());
+      celda = '';
+    } else {
+      celda += ch;
+    }
+  }
+  celdas.push(celda.trim());
+  return celdas;
+}
+
 function _procesarArchivo(file) {
   const reader = new FileReader();
   reader.onload  = e => {
-    const { validos, invalidos } = _parsearCSV(e.target.result);
-    _mostrarVistaPrevia(validos, invalidos);
+    const { validos, invalidos, delimitador } = _parsearCSV(e.target.result);
+    _mostrarVistaPrevia(validos, invalidos, delimitador);
   };
   reader.onerror = () => toast('Error al leer el archivo.', 'error');
   reader.readAsText(file, 'UTF-8');
@@ -1192,13 +1217,14 @@ function _procesarArchivo(file) {
 
 function _parsearCSV(texto) {
   const lineas = texto.replace(/^﻿/, '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-  if (lineas.length < 2) return { validos: [], invalidos: [] };
+  if (lineas.length < 2) return { validos: [], invalidos: [], delimitador: ';' };
 
-  const validos   = [];
-  const invalidos = [];
+  const delimitador = _detectarDelimitador(lineas[0]);
+  const validos     = [];
+  const invalidos   = [];
 
   lineas.slice(1).forEach((linea, idx) => {
-    const cols   = linea.split(';');
+    const cols   = _parsearCeldas(linea, delimitador);
     const nombre = cols[0]?.trim();
     const unidad = cols[1]?.trim();
     const tipo   = cols[2]?.trim();
@@ -1238,12 +1264,16 @@ function _parsearCSV(texto) {
     validos.push({ nombre, unidad, tipo, stockInicial, stockMinimo, tipoNuevo, unidadNueva });
   });
 
-  return { validos, invalidos };
+  return { validos, invalidos, delimitador };
 }
 
-function _mostrarVistaPrevia(validos, invalidos) {
+function _mostrarVistaPrevia(validos, invalidos, delimitador = ';') {
   const el = document.getElementById('inv-csv-preview');
   if (!el) return;
+
+  const msgDelimitador = delimitador === ';'
+    ? 'Delimitador detectado: punto y coma (;)'
+    : 'Delimitador detectado: coma (,)';
 
   if (!validos.length && !invalidos.length) {
     el.innerHTML = `<p style="font-size:12px;color:var(--text-3)">El archivo no contiene filas de datos.</p>`;
@@ -1279,6 +1309,7 @@ function _mostrarVistaPrevia(validos, invalidos) {
   </tr>`).join('');
 
   el.innerHTML = `
+    <div style="font-size:11px;color:var(--text-3);margin-bottom:6px">${msgDelimitador}</div>
     <div class="card-title" style="margin-bottom:10px">
       Vista previa — ${validos.length} válido${validos.length !== 1 ? 's' : ''}
       ${invalidos.length ? `, ${invalidos.length} con error` : ''}
