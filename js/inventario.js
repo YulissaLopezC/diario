@@ -678,7 +678,7 @@ function _abrirModalDetalle(prod) {
   const backdrop = document.createElement('div');
   backdrop.className = 'modal-backdrop';
   backdrop.innerHTML = `
-    <div class="modal" style="max-width:460px;width:100%">
+    <div class="modal" style="max-width:460px;width:100%;display:flex;flex-direction:column;max-height:90vh;overflow:hidden">
 
       <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:20px">
         <div style="flex:1;min-width:0">
@@ -691,25 +691,27 @@ function _abrirModalDetalle(prod) {
         </div>
       </div>
 
-      <div style="background:var(--surface-2);border-radius:var(--radius-md);padding:14px 16px;margin-bottom:14px">
-        <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Información</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px">
-          <div><div style="color:var(--text-3);font-size:11px">Tipo</div><strong>${prod.tipo ? prod.tipo.charAt(0).toUpperCase() + prod.tipo.slice(1).toLowerCase() : '—'}</strong></div>
-          <div><div style="color:var(--text-3);font-size:11px">Unidad</div><strong>${prod.unidad || '—'}</strong></div>
-          <div><div style="color:var(--text-3);font-size:11px">Stock inicial</div><strong>${prod.stockInicial ?? 0}</strong></div>
-          <div><div style="color:var(--text-3);font-size:11px">Stock mínimo</div><strong>${prod.stockMinimo ?? '—'}</strong></div>
-          <div><div style="color:var(--text-3);font-size:11px">Total entradas</div><strong style="color:var(--green)">${prod.entradas}</strong></div>
-          <div><div style="color:var(--text-3);font-size:11px">Total salidas</div><strong style="color:var(--red)">${prod.salidas}</strong></div>
+      <div class="modal-body">
+        <div style="background:var(--surface-2);border-radius:var(--radius-md);padding:14px 16px;margin-bottom:14px">
+          <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Información</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px">
+            <div><div style="color:var(--text-3);font-size:11px">Tipo</div><strong>${prod.tipo ? prod.tipo.charAt(0).toUpperCase() + prod.tipo.slice(1).toLowerCase() : '—'}</strong></div>
+            <div><div style="color:var(--text-3);font-size:11px">Unidad</div><strong>${prod.unidad || '—'}</strong></div>
+            <div><div style="color:var(--text-3);font-size:11px">Stock inicial</div><strong>${prod.stockInicial ?? 0}</strong></div>
+            <div><div style="color:var(--text-3);font-size:11px">Stock mínimo</div><strong>${prod.stockMinimo ?? '—'}</strong></div>
+            <div><div style="color:var(--text-3);font-size:11px">Total entradas</div><strong style="color:var(--green)">${prod.entradas}</strong></div>
+            <div><div style="color:var(--text-3);font-size:11px">Total salidas</div><strong style="color:var(--red)">${prod.salidas}</strong></div>
+          </div>
         </div>
-      </div>
 
-      <div style="background:var(--surface-2);border-radius:var(--radius-md);padding:14px 16px;margin-bottom:20px">
-        <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Consulta histórica</div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <input type="date" id="inv-det-fecha" style="height:32px;font-size:13px;flex:1" />
-          <button class="btn-primary" id="inv-det-consultar" style="height:32px;padding:0 14px;font-size:13px;white-space:nowrap">Consultar</button>
+        <div style="background:var(--surface-2);border-radius:var(--radius-md);padding:14px 16px;margin-bottom:4px">
+          <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Consulta histórica</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <input type="date" id="inv-det-fecha" style="height:32px;font-size:13px;flex:1" />
+            <button class="btn-primary" id="inv-det-consultar" style="height:32px;padding:0 14px;font-size:13px;white-space:nowrap">Consultar</button>
+          </div>
+          <div id="inv-det-resultado" style="margin-top:10px;display:none;font-size:13px;padding:8px 12px;background:var(--surface);border-radius:var(--radius-sm)"></div>
         </div>
-        <div id="inv-det-resultado" style="margin-top:10px;display:none;font-size:13px;padding:8px 12px;background:var(--surface);border-radius:var(--radius-sm)"></div>
       </div>
 
       <div class="modal-btns" style="justify-content:space-between">

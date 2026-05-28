@@ -211,46 +211,48 @@
     <div id="inv-modal-vista-form">
       <h3>Crear producto</h3>
 
-      <div style="display:flex;flex-direction:column;gap:12px;margin-top:16px">
-        <div class="field">
-          <label for="inv-prod-nombre">Nombre</label>
-          <input type="text" id="inv-prod-nombre" placeholder="Ej: Ron de Caldas" autocomplete="off" />
-        </div>
+      <div class="modal-body">
+        <div style="display:flex;flex-direction:column;gap:12px;margin-top:16px">
+          <div class="field">
+            <label for="inv-prod-nombre">Nombre</label>
+            <input type="text" id="inv-prod-nombre" placeholder="Ej: Ron de Caldas" autocomplete="off" />
+          </div>
 
-        <div class="field">
-          <label for="inv-prod-unidad">Unidad</label>
-          <div class="autocomplete-wrap">
-            <input type="text" id="inv-prod-unidad" placeholder="Ej: Botella" autocomplete="off" />
-            <div class="autocomplete-list" id="inv-prod-unidad-lista" style="display:none"></div>
+          <div class="field">
+            <label for="inv-prod-unidad">Unidad</label>
+            <div class="autocomplete-wrap">
+              <input type="text" id="inv-prod-unidad" placeholder="Ej: Botella" autocomplete="off" />
+              <div class="autocomplete-list" id="inv-prod-unidad-lista" style="display:none"></div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="inv-prod-tipo">Tipo de producto</label>
+            <div class="autocomplete-wrap">
+              <input type="text" id="inv-prod-tipo" placeholder="Escribe y crea tu primer tipo..." autocomplete="off" />
+              <div class="autocomplete-list" id="inv-prod-tipo-lista" style="display:none"></div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="inv-prod-stock">Stock inicial</label>
+            <input type="number" id="inv-prod-stock" min="0" value="0" inputmode="numeric" autocomplete="off" />
+          </div>
+
+          <div class="field">
+            <label for="inv-prod-stock-min">
+              Stock mínimo
+              <span style="color:var(--text-3);font-weight:400">(opcional)</span>
+            </label>
+            <input type="number" id="inv-prod-stock-min" min="0" placeholder="Alerta si baja de este valor" inputmode="numeric" autocomplete="off" />
           </div>
         </div>
 
-        <div class="field">
-          <label for="inv-prod-tipo">Tipo de producto</label>
-          <div class="autocomplete-wrap">
-            <input type="text" id="inv-prod-tipo" placeholder="Escribe y crea tu primer tipo..." autocomplete="off" />
-            <div class="autocomplete-list" id="inv-prod-tipo-lista" style="display:none"></div>
-          </div>
+        <div style="margin-top:16px;text-align:center">
+          <a id="inv-link-csv" style="font-size:13px;color:var(--green);cursor:pointer;text-decoration:underline">
+            ¿Tienes varios productos? Carga masiva →
+          </a>
         </div>
-
-        <div class="field">
-          <label for="inv-prod-stock">Stock inicial</label>
-          <input type="number" id="inv-prod-stock" min="0" value="0" inputmode="numeric" autocomplete="off" />
-        </div>
-
-        <div class="field">
-          <label for="inv-prod-stock-min">
-            Stock mínimo
-            <span style="color:var(--text-3);font-weight:400">(opcional)</span>
-          </label>
-          <input type="number" id="inv-prod-stock-min" min="0" placeholder="Alerta si baja de este valor" inputmode="numeric" autocomplete="off" />
-        </div>
-      </div>
-
-      <div style="margin-top:16px;text-align:center">
-        <a id="inv-link-csv" style="font-size:13px;color:var(--green);cursor:pointer;text-decoration:underline">
-          ¿Tienes varios productos? Carga masiva →
-        </a>
       </div>
 
       <div class="modal-btns">
@@ -301,51 +303,53 @@
 
 <!-- Modal: Informe de inventario por período -->
 <div class="modal-backdrop" id="inv-inf-backdrop" style="display:none">
-  <div class="modal" style="max-width:720px;width:100%">
+  <div class="modal" style="max-width:720px;width:100%;display:flex;flex-direction:column;max-height:90vh;overflow:hidden">
     <h3>Informe de inventario por período</h3>
 
-    <!-- Filtros -->
-    <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-top:16px;margin-bottom:16px">
-      <div class="field" style="flex:1;min-width:120px">
-        <label for="inv-inf-desde">Desde</label>
-        <input type="date" id="inv-inf-desde" />
+    <div class="modal-body">
+      <!-- Filtros -->
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-top:16px;margin-bottom:16px">
+        <div class="field" style="flex:1;min-width:120px">
+          <label for="inv-inf-desde">Desde</label>
+          <input type="date" id="inv-inf-desde" />
+        </div>
+        <div class="field" style="flex:1;min-width:120px">
+          <label for="inv-inf-hasta">Hasta</label>
+          <input type="date" id="inv-inf-hasta" />
+        </div>
+        <button class="btn-secondary" id="inv-inf-btn-preview"
+          style="height:34px;padding:0 14px;font-size:13px;white-space:nowrap">Ver vista previa</button>
+        <button class="btn-secondary" id="inv-inf-btn-excel-top"
+          style="height:34px;padding:0 14px;font-size:13px;white-space:nowrap">⬇ Descargar Excel</button>
       </div>
-      <div class="field" style="flex:1;min-width:120px">
-        <label for="inv-inf-hasta">Hasta</label>
-        <input type="date" id="inv-inf-hasta" />
+
+      <!-- Indicador de carga -->
+      <div id="inv-inf-loading"
+        style="display:none;text-align:center;padding:20px 0;font-size:13px;color:var(--text-3)">
+        Calculando datos…
       </div>
-      <button class="btn-secondary" id="inv-inf-btn-preview"
-        style="height:34px;padding:0 14px;font-size:13px;white-space:nowrap">Ver vista previa</button>
-      <button class="btn-secondary" id="inv-inf-btn-excel-top"
-        style="height:34px;padding:0 14px;font-size:13px;white-space:nowrap">⬇ Descargar Excel</button>
-    </div>
 
-    <!-- Indicador de carga -->
-    <div id="inv-inf-loading"
-      style="display:none;text-align:center;padding:20px 0;font-size:13px;color:var(--text-3)">
-      Calculando datos…
-    </div>
-
-    <!-- Vista previa -->
-    <div id="inv-inf-preview" style="display:none">
-      <div id="inv-inf-periodo"
-        style="font-size:12px;color:var(--text-3);margin-bottom:10px"></div>
-      <div class="table-wrap" style="max-height:60vh;overflow-y:auto">
-        <table>
-          <thead>
-            <tr>
-              <th>Producto</th>
-              <th>Tipo</th>
-              <th>Unidad</th>
-              <th style="text-align:right">Stock inicial</th>
-              <th style="text-align:right">Entradas</th>
-              <th style="text-align:right">Salidas</th>
-              <th style="text-align:right">Otras salidas</th>
-              <th style="text-align:right">Stock final</th>
-            </tr>
-          </thead>
-          <tbody id="inv-inf-tbody"></tbody>
-        </table>
+      <!-- Vista previa -->
+      <div id="inv-inf-preview" style="display:none">
+        <div id="inv-inf-periodo"
+          style="font-size:12px;color:var(--text-3);margin-bottom:10px"></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>Tipo</th>
+                <th>Unidad</th>
+                <th style="text-align:right">Stock inicial</th>
+                <th style="text-align:right">Entradas</th>
+                <th style="text-align:right">Salidas</th>
+                <th style="text-align:right">Otras salidas</th>
+                <th style="text-align:right">Stock final</th>
+              </tr>
+            </thead>
+            <tbody id="inv-inf-tbody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
